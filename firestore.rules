@@ -1,0 +1,58 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── users ──────────────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── classes ────────────────────────────────────────────────────────
+    match /classes/{classId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── observations ───────────────────────────────────────────────────
+    // Observations belong to a CLASS (which may have multiple teachers).
+    // Admin: full access.
+    // Teacher: read-only, only PUBLISHED observations for their own class.
+    // NOTE: the query itself must filter on status == 'published' (not just
+    // teacherIds/classId) so Firestore can verify every possible result
+    // satisfies this rule — otherwise the whole query is rejected.
+    match /observations/{obsId} {
+      allow read: if isAdmin() ||
+        (isSignedIn() &&
+          resource.data.classId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId &&
+          resource.data.status == 'published');
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── reports ────────────────────────────────────────────────────────
+    // Admin: full access.
+    // Teacher: read-only, only reports for their class that were explicitly
+    // shared (sharedWithTeacher == true).
+    match /reports/{reportId} {
+      allow read: if isAdmin() ||
+        (isSignedIn() &&
+          resource.data.classId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId &&
+          resource.data.sharedWithTeacher == true);
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}
