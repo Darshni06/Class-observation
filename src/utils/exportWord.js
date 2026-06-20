@@ -5,6 +5,7 @@ import {
 import { saveAs } from 'file-saver'
 import JSZip from 'jszip'
 import { formatDate } from './helpers'
+import { OBSERVATION_CATEGORIES } from '../data/observationParams'
 
 const GREEN = '0F6E56'
 const GREEN_DARK = '085041'
@@ -54,6 +55,21 @@ export function buildReportDocument(report) {
       ],
     }),
     new Paragraph({ text: '', spacing: { after: 200 } }),
+    ...OBSERVATION_CATEGORIES.flatMap(cat => {
+      const text = report.categorySummaries?.[cat.id]
+      if (!text) return []
+      return [
+        new Paragraph({
+          children: [new TextRun({ text: cat.label.toUpperCase(), bold: true, size: 22, color: GREEN_DARK, characterSpacing: 10 })],
+          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'E1F5EE' } },
+          spacing: { after: 120 },
+        }),
+        new Paragraph({
+          children: [new TextRun({ text, size: 22, color: '2C2C2A' })],
+          spacing: { after: 240 },
+        }),
+      ]
+    }),
     new Paragraph({
       children: [new TextRun({ text: 'OVERALL SUMMARY', bold: true, size: 22, color: GREEN_DARK, characterSpacing: 10 })],
       border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'E1F5EE' } },

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import { getReportsByClass } from '../../firebase/services'
 import { exportReportToWord } from '../../utils/exportWord'
+import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
 import { PageSpinner, EmptyState } from '../../components/UI'
 import { formatDateTime, round1 } from '../../utils/helpers'
 
@@ -74,6 +75,14 @@ export default function MyReportsPage() {
           </div>
           <div className="report-body">
             <div className="report-ai-output">
+              {OBSERVATION_CATEGORIES.map(cat => (
+                active.categorySummaries?.[cat.id] ? (
+                  <div key={cat.id}>
+                    <h4>{cat.label}</h4>
+                    <p>{active.categorySummaries[cat.id]}</p>
+                  </div>
+                ) : null
+              ))}
               <h4>Overall Summary</h4>
               <p>{active.overallSummary}</p>
               <h4>Strengths</h4>

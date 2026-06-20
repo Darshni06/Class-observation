@@ -30,6 +30,12 @@ function describeObservation(obs) {
   return lines.join('\n')
 }
 
+// Builds the exact list of category keys + labels the model must use,
+// straight from the school's template categories — so the JSON keys it
+// returns always line up with OBSERVATION_CATEGORIES in the app.
+const CATEGORY_KEY_LIST = OBSERVATION_CATEGORIES.map(c => `"${c.id}"`).join(', ')
+const CATEGORY_LABEL_LINES = OBSERVATION_CATEGORIES.map(c => `- "${c.id}" = ${c.label}`).join('\n')
+
 function buildPrompt({ classDisplayName, teacherNames, period, observations }) {
   const observationBlocks = observations.map(describeObservation).join('\n\n')
 
@@ -42,13 +48,26 @@ Teacher(s): ${teacherNames.join(', ') || 'Not assigned'}
 Reporting period: ${period}
 Number of observations included: ${observations.length}
 
-Here is the structured data gathered from classroom observations (category, parameter, level out of 3, and the observer's written remark):
+Here is the structured data gathered from classroom observations, grouped by category (each category contains its own parameters/sub-topics with a level out of 3 and the observer's written remark):
 
 ${observationBlocks}
 
-Respond with ONLY a JSON object (no markdown fences, no extra commentary) in exactly this shape:
+The data above is grouped into exactly these categories:
+${CATEGORY_LABEL_LINES}
+
+For EACH of those categories, write one concise, well-formed paragraph (3-5 sentences) that synthesizes everything recorded under that category's sub-topics across all the observations above into a single, readable summary — do not just list the sub-topics, weave them into flowing prose. If a category has little or no data for this period, say so briefly rather than inventing detail.
+
+Respond with ONLY a JSON object (no markdown fences, no extra commentary) in exactly this shape, using exactly these category keys: ${CATEGORY_KEY_LIST}
 {
-  "overallSummary": "A 4-6 sentence narrative summary of the class's practice across the observation period, written in flowing prose.",
+  "categorySummaries": {
+    "environment": "paragraph summarizing the Environment category",
+    "norms": "paragraph summarizing the Norms category",
+    "children": "paragraph summarizing the Children category",
+    "teacherRole": "paragraph summarizing the Teacher's role category",
+    "writingWorkbook": "paragraph summarizing the Writing / Workbook category",
+    "teachersRecord": "paragraph summarizing the Teacher's record category"
+  },
+  "overallSummary": "A 3-4 sentence high-level synthesis across all categories, written in flowing prose.",
   "strengths": ["3 to 6 specific, evidence-based strengths, each a complete sentence."],
   "recommendations": ["3 to 6 specific, actionable, constructive recommendations, each a complete sentence."]
 }`
@@ -105,7 +124,14 @@ export async function generateObservationReport({ classDisplayName, teacherNames
     throw new Error('Could not parse the AI response. Please try generating again.')
   }
 
+  // Guarantee every category key exists even if the model skipped one
+  const categorySummaries = {}
+  OBSERVATION_CATEGORIES.forEach(cat => {
+    categorySummaries[cat.id] = parsed.categorySummaries?.[cat.id] || ''
+  })
+
   return {
+    categorySummaries,
     overallSummary: parsed.overallSummary || '',
     strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
     recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],

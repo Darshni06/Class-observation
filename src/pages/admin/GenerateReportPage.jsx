@@ -5,6 +5,7 @@ import {
   addReport, shareReportWithTeacher, deleteReport,
 } from '../../firebase/services'
 import { generateObservationReport } from '../../utils/geminiService'
+import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
 import { exportReportToWord } from '../../utils/exportWord'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
@@ -101,6 +102,7 @@ export default function GenerateReportPage() {
         teacherNames: selectedClass?.teacherNames || [],
         period: period.trim(),
         observationIds: selectedIds,
+        categorySummaries: draft.categorySummaries,
         overallSummary: draft.overallSummary,
         strengths: draft.strengths,
         recommendations: draft.recommendations,
@@ -225,6 +227,14 @@ export default function GenerateReportPage() {
           </div>
           <div className="report-body">
             <div className="report-ai-output">
+              {OBSERVATION_CATEGORIES.map(cat => (
+                draft.categorySummaries?.[cat.id] ? (
+                  <div key={cat.id}>
+                    <h4>{cat.label}</h4>
+                    <p>{draft.categorySummaries[cat.id]}</p>
+                  </div>
+                ) : null
+              ))}
               <h4>Overall Summary</h4>
               <p>{draft.overallSummary}</p>
               <h4>Strengths</h4>
