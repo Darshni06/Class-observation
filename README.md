@@ -1,16 +1,17 @@
 # Kamala Niketan — Class Observation Portal
 
 A web portal for recording Montessori classroom observations, sharing structured
-feedback with teachers, and generating AI-assisted reports with Grok (x.ai).
+feedback with teachers, and generating AI-assisted reports via Groq (free tier).
 
 - **Admin portal** (`/admin`) — record observations, manage teachers & classes,
   generate AI reports, export data.
 - **Teacher portal** (`/teacher`) — read-only view of feedback, progress, and
   shared reports for their class.
 
-**Tech stack:** React + Vite, Firebase (Auth + Firestore), Grok (x.ai) API
-for AI report generation, `xlsx` + `file-saver` for Excel export, `docx` +
-`file-saver` (+ `jszip` for bulk export) for Word export.
+**Tech stack:** React + Vite, Firebase (Auth + Firestore), Groq API
+(free tier, hosted Llama models) for AI report generation, `xlsx` +
+`file-saver` for Excel export, `docx` + `file-saver` (+ `jszip` for bulk
+export) for Word export.
 
 **Observations belong to a class, not an individual teacher.** A class can
 have more than one teacher assigned (e.g. two co-teachers); any observation
@@ -77,21 +78,27 @@ teachers.
 
 ---
 
-## 2. Get a Grok (x.ai) API key
+## 2. Get a Groq API key (free)
 
-1. Go to <https://console.x.ai> → sign in → **API Keys → Create API key** →
+1. Go to <https://console.groq.com/keys> → sign in → **Create API Key** →
    copy it.
-2. This key powers the "Generate with AI" button on the report page. Check
-   current pricing/quotas on the same console page.
-3. The model used is `grok-3-mini` (set in `src/utils/geminiService.js` as
-   `GROK_MODEL`) — change that one constant if you want a different Grok
-   model.
+2. This key powers the "Generate with AI" button on the report page. Groq's
+   free tier is generous for this kind of usage; check current limits on the
+   same console page.
+3. The model used is `llama-3.3-70b-versatile` (set in
+   `src/utils/geminiService.js` as `GROQ_MODEL`) — change that one constant
+   if you want a different hosted model (Groq lists available model names on
+   their console/docs).
 
 > **Security note:** because this is a pure frontend app (no backend server),
-> the Grok key is shipped to the browser. For a school-internal tool this is
-> a reasonable trade-off, but if you want to lock it down further, x.ai's
-> console lets you scope keys and monitor usage — rotate the key immediately
-> if you ever suspect it has leaked.
+> the Groq key is shipped to the browser. For a school-internal tool this is
+> a reasonable trade-off; rotate the key immediately if you ever suspect it
+> has leaked.
+
+> **Don't confuse Groq with Grok** — Groq (console.groq.com) is the free-tier
+> inference host this app uses; Grok (console.x.ai) is a different, paid
+> product by xAI. If you ever see a "team doesn't have credits" error, you're
+> pointed at the wrong one.
 
 ---
 
@@ -103,7 +110,7 @@ teachers.
    ```
 2. Open `.env` and fill in:
    - The six `VITE_FIREBASE_*` values from Step 1.4's `firebaseConfig` object.
-   - `VITE_GROK_API_KEY` from Step 2.
+   - `VITE_GROQ_API_KEY` from Step 2.
 3. **Never commit `.env`** — it's already in `.gitignore`.
 
 ---
@@ -166,7 +173,7 @@ show your real source files as new/changed.
    - `VITE_FIREBASE_STORAGE_BUCKET`
    - `VITE_FIREBASE_MESSAGING_SENDER_ID`
    - `VITE_FIREBASE_APP_ID`
-   - `VITE_GROK_API_KEY`
+   - `VITE_GROQ_API_KEY`
 5. Click **Deploy**. After it finishes, Vercel gives you a live URL
    (e.g. `class-observation.vercel.app`).
 6. **Authorize the domain in Firebase:** Firebase Console → Authentication →
@@ -194,9 +201,11 @@ Any future `git push` to `main` automatically redeploys on Vercel.
   summarize, label the period, then **Generate with AI**. Review the draft,
   **Save Report**, then **Export Word** or **Share** it so every teacher on
   that class can see it in their portal.
-- **Export** — bulk-export filtered observations to Excel (`.xlsx`, with a
-  Summary sheet and a Detailed Scores sheet) and filtered reports to Word
-  (single `.docx`, or a `.zip` of `.docx` files when more than one matches).
+- **Export** — bulk-export filtered observations to Excel (`.xlsx`) and
+  filtered reports to Word (single `.docx`, or a `.zip` of `.docx` files
+  when more than one matches). The Excel export lays each observation out
+  on its own worksheet in the exact Section / Parameter / Scale / Level /
+  Remarks format of the school's original observation template.
 - **Teachers** — create accounts (with a temporary password you share with the
   teacher) and assign each teacher to one class.
 - **Classes** — create classes manually and assign **one or more** teachers
@@ -253,7 +262,7 @@ src/
   contexts/ToastContext.jsx   ← global toast notifications
   utils/exportExcel.js        ← observations → .xlsx
   utils/exportWord.js         ← reports → .docx / .zip
-  utils/geminiService.js      ← Grok prompt + API call (filename kept for minimal diff)
+  utils/geminiService.js      ← Groq prompt + API call (filename kept for minimal diff)
   components/                 ← Layout, shared UI, modals
   pages/admin/                ← Dashboard, New/All Observations, Reports, Export, Teachers, Classes
   pages/teacher/               ← My Feedback, My Progress, My Reports

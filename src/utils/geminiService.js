@@ -1,11 +1,12 @@
 import { OBSERVATION_CATEGORIES } from '../data/observationParams'
 import { formatDate } from './helpers'
 
-// Using Grok (x.ai) via its OpenAI-compatible Chat Completions endpoint.
-// Get a key at https://console.x.ai → API Keys, and set it as
-// VITE_GROK_API_KEY in your .env file (see .env.example).
-const GROK_URL = 'https://api.x.ai/v1/chat/completions'
-const GROK_MODEL = 'grok-3-mini'
+// Using Groq (console.groq.com) via its OpenAI-compatible Chat Completions
+// endpoint. Groq has a free tier for hosted open models (Llama, etc).
+// Get a key at https://console.groq.com/keys and set it as
+// VITE_GROQ_API_KEY in your .env file (see .env.example).
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const GROQ_MODEL = 'llama-3.3-70b-versatile'
 
 function describeObservation(obs) {
   const lines = [`Observation on ${formatDate(obs.date)} (${obs.classDisplayName}, observed by ${obs.observerName}):`]
@@ -60,9 +61,9 @@ function cleanJson(text) {
 }
 
 export async function generateObservationReport({ classDisplayName, teacherNames, period, observations }) {
-  const apiKey = import.meta.env.VITE_GROK_API_KEY
+  const apiKey = import.meta.env.VITE_GROQ_API_KEY
   if (!apiKey) {
-    throw new Error('Grok API key is not configured. Add VITE_GROK_API_KEY to your .env file (and to Vercel\'s project environment variables).')
+    throw new Error('Groq API key is not configured. Add VITE_GROQ_API_KEY to your .env file (and to Vercel\'s project environment variables).')
   }
   if (!observations?.length) {
     throw new Error('Select at least one observation to generate a report.')
@@ -70,14 +71,14 @@ export async function generateObservationReport({ classDisplayName, teacherNames
 
   const prompt = buildPrompt({ classDisplayName, teacherNames, period, observations })
 
-  const res = await fetch(GROK_URL, {
+  const res = await fetch(GROQ_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: GROK_MODEL,
+      model: GROQ_MODEL,
       temperature: 0.6,
       response_format: { type: 'json_object' },
       messages: [
@@ -88,13 +89,13 @@ export async function generateObservationReport({ classDisplayName, teacherNames
 
   if (!res.ok) {
     const errBody = await res.text().catch(() => '')
-    throw new Error(`Grok API error (${res.status}): ${errBody || res.statusText}`)
+    throw new Error(`Groq API error (${res.status}): ${errBody || res.statusText}`)
   }
 
   const data = await res.json()
   const text = data?.choices?.[0]?.message?.content
   if (!text) {
-    throw new Error('Grok returned an empty response. Please try again.')
+    throw new Error('Groq returned an empty response. Please try again.')
   }
 
   let parsed
