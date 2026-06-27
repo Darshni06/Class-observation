@@ -9,18 +9,19 @@ import { OBSERVATION_CATEGORIES, buildBlankScores } from '../../data/observation
 import { PageSpinner, Pill } from '../../components/UI'
 import { todayISO, nowTime24 } from '../../utils/helpers'
 
-export default function NewObservationPage() {
+// Same form as the admin's New/Edit Observation page, but the class is fixed
+// to the teacher's own assigned class — no class picker needed.
+export default function TeacherNewObservationPage() {
   const { id } = useParams()
   const isEdit = Boolean(id)
   const navigate = useNavigate()
   const { profile } = useAuth()
   const toast = useToast()
 
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(false)
-  const [classes, setClasses]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+  const [myClass, setMyClass] = useState(null)
 
-  const [classId, setClassId]       = useState('')
   const [observerName, setObserverName] = useState('')
   const [date, setDate]             = useState(todayISO())
   const [time, setTime]             = useState(nowTime24())
@@ -31,13 +32,13 @@ export default function NewObservationPage() {
 
   useEffect(() => {
     (async () => {
-      const cls = await getClasses()
-      setClasses(cls)
+      const classes = await getClasses()
+      const mine = classes.find(c => c.id === profile?.classId) || null
+      setMyClass(mine)
 
       if (isEdit) {
         const obs = await getObservation(id)
         if (obs) {
-          setClassId(obs.classId || '')
           setObserverName(obs.observerName || '')
           setDate(obs.date || todayISO())
           setTime(obs.time || nowTime24())
@@ -67,20 +68,18 @@ export default function NewObservationPage() {
     }))
   }
 
-  const selectedClass = useMemo(() => classes.find(c => c.id === classId), [classes, classId])
-
   const validateHeader = () => {
-    if (!classId) return 'Please select a class.'
+    if (!myClass) return 'You are not assigned to a class yet. Contact your admin.'
     if (!observerName.trim()) return 'Please enter the observer name.'
     if (!date) return 'Please select a date.'
     return null
   }
 
   const buildPayload = (status) => ({
-    classId,
-    classDisplayName: selectedClass?.displayName || '',
-    teacherIds: selectedClass?.teacherIds || [],
-    teacherNames: selectedClass?.teacherNames || [],
+    classId: myClass.id,
+    classDisplayName: myClass.displayName,
+    teacherIds: myClass.teacherIds || [],
+    teacherNames: myClass.teacherNames || [],
     observerName: observerName.trim(),
     date,
     time,
@@ -101,10 +100,10 @@ export default function NewObservationPage() {
         await updateObservation(id, payload)
         toast.success(status === 'published' ? 'Observation published.' : 'Draft updated.')
       } else {
-        await addObservation(payload, profile?.id, 'admin')
+        await addObservation(payload, profile?.id, 'teacher')
         toast.success(status === 'published' ? 'Observation published.' : 'Saved as draft.')
       }
-      navigate('/admin/observations')
+      navigate('/teacher/observations')
     } catch (e) {
       toast.error('Could not save: ' + e.message)
     } finally {
@@ -118,7 +117,7 @@ export default function NewObservationPage() {
     <div>
       <div className="page-header">
         <h1>{isEdit ? 'Edit Observation' : 'New Observation'}</h1>
-        <p>Record a classroom observation session. Level scale: 3 = Good · 2 = Average · 1 = Needs improvement.</p>
+        <p>Record a classroom observation session for your class. Level scale: 3 = Good · 2 = Average · 1 = Needs improvement.</p>
       </div>
 
       <div className="card">
@@ -127,17 +126,16 @@ export default function NewObservationPage() {
           <div className="form-grid-3">
             <div className="fgroup">
               <label>Class</label>
-              <select value={classId} onChange={(e) => setClassId(e.target.value)}>
-                <option value="">Select class…</option>
-                {classes.map(c => <option key={c.id} value={c.id}>{c.displayName}</option>)}
-              </select>
+              <div style={{ paddingTop: 6 }}>
+                {myClass ? <Pill label={myClass.displayName} cls="pill-green" /> : <Pill label="No class assigned" cls="pill-gray" />}
+              </div>
             </div>
             <div className="fgroup">
               <label>Teacher(s)</label>
               <div style={{ paddingTop: 6 }}>
-                {selectedClass?.teacherNames?.length
-                  ? selectedClass.teacherNames.map(n => <Pill key={n} label={n} cls="pill-green" />)
-                  : <Pill label="No teacher assigned yet" cls="pill-gray" />}
+                {(myClass?.teacherNames || []).length
+                  ? myClass.teacherNames.map(n => <Pill key={n} label={n} cls="pill-green" />)
+                  : <Pill label="—" cls="pill-gray" />}
               </div>
             </div>
             <div className="fgroup">
@@ -218,7 +216,7 @@ export default function NewObservationPage() {
       </div>
 
       <div className="btn-group" style={{ justifyContent: 'flex-end' }}>
-        <button className="btn" onClick={() => navigate('/admin/observations')} disabled={saving}>Cancel</button>
+        <button className="btn" onClick={() => navigate('/teacher/observations')} disabled={saving}>Cancel</button>
         <button className="btn" onClick={() => handleSave('draft')} disabled={saving}>
           <i className="ti ti-file-pencil" /> Save as Draft
         </button>

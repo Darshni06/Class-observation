@@ -16,6 +16,10 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    function myClassId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId;
+    }
+
     // ── users ──────────────────────────────────────────────────────────
     match /users/{uid} {
       allow read: if isAdmin() || isOwner(uid);
@@ -29,30 +33,30 @@ service cloud.firestore {
     }
 
     // ── observations ───────────────────────────────────────────────────
-    // Observations belong to a CLASS (which may have multiple teachers).
-    // Admin: full access.
-    // Teacher: read-only, only PUBLISHED observations for their own class.
-    // NOTE: the query itself must filter on status == 'published' (not just
-    // teacherIds/classId) so Firestore can verify every possible result
-    // satisfies this rule — otherwise the whole query is rejected.
+    // Observations belong to a CLASS. Admin has full access everywhere.
+    // A teacher has full CRUD too, but only for their OWN class — they are
+    // a co-manager of that class's observation record, on par with admin,
+    // just scoped to it. Read/write both only depend on classId, so a
+    // single classId-filtered query is always provably safe for Firestore.
     match /observations/{obsId} {
-      allow read: if isAdmin() ||
-        (isSignedIn() &&
-          resource.data.classId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId &&
-          resource.data.status == 'published');
-      allow create, update, delete: if isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && resource.data.classId == myClassId());
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.classId == myClassId());
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.classId == myClassId());
     }
 
     // ── reports ────────────────────────────────────────────────────────
-    // Admin: full access.
-    // Teacher: read-only, only reports for their class that were explicitly
-    // shared (sharedWithTeacher == true).
+    // Admin: full access always.
+    // Teacher: full CRUD for their own class, but can only READ a report
+    // once `sharedWithTeacher == true`. Reports a teacher generates
+    // themselves are stamped sharedWithTeacher = true automatically at
+    // creation (see addReport in services.js), so they see their own work
+    // immediately; an admin-authored report only becomes visible once the
+    // admin explicitly shares it.
     match /reports/{reportId} {
       allow read: if isAdmin() ||
-        (isSignedIn() &&
-          resource.data.classId == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.classId &&
-          resource.data.sharedWithTeacher == true);
-      allow create, update, delete: if isAdmin();
+        (isSignedIn() && resource.data.classId == myClassId() && resource.data.sharedWithTeacher == true);
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.classId == myClassId());
+      allow update, delete: if isAdmin() || (isSignedIn() && resource.data.classId == myClassId());
     }
   }
 }

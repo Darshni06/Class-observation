@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
-import { getObservationsByClass } from '../../firebase/services'
+import { getPublishedObservationsByClass } from '../../firebase/services'
 import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
 import { PageSpinner, EmptyState, LevelBadge } from '../../components/UI'
 import { formatDate, formatTime, round1 } from '../../utils/helpers'
@@ -18,7 +18,7 @@ export default function MyFeedbackPage() {
     ;(async () => {
       try {
         if (!profile?.classId) { setObservations([]); return }
-        const obs = await getObservationsByClass(profile.classId)
+        const obs = await getPublishedObservationsByClass(profile.classId)
         if (cancelled) return
         setObservations(obs)
         if (obs.length) setActiveId(obs[0].id)

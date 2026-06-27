@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
-import { getObservationsByClass } from '../../firebase/services'
+import { getPublishedObservationsByClass } from '../../firebase/services'
 import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
 import { PageSpinner, EmptyState, ProgressBarRow } from '../../components/UI'
 import { formatDate, round1 } from '../../utils/helpers'
@@ -17,7 +17,7 @@ export default function MyProgressPage() {
     ;(async () => {
       try {
         if (!profile?.classId) { setObservations([]); return }
-        const obs = await getObservationsByClass(profile.classId)
+        const obs = await getPublishedObservationsByClass(profile.classId)
         if (!cancelled) setObservations(obs)
       } catch (e) {
         if (!cancelled) toast.error('Could not load progress: ' + e.message)

@@ -194,10 +194,11 @@ const withComputedScores = (data) => {
   }
 }
 
-export const addObservation = async (data, createdByUid) => {
+export const addObservation = async (data, createdByUid, creatorRole = 'admin') => {
   const ref = await addDoc(collection(db, 'observations'), {
     ...withComputedScores(data),
     createdBy: createdByUid,
+    createdByRole: creatorRole, // 'admin' | 'teacher' — used for the admin's comparison/analysis page
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -229,12 +230,10 @@ export const getAllObservations = async () => {
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
 }
 
-// Published observations for one class — used by the teacher portal.
-// IMPORTANT: both `classId` and `status` are filtered IN the query itself
-// (not just client-side) because the Firestore rule can only allow a query
-// if every possible result is provably permitted — a query that could
-// return a draft would be rejected outright with permission-denied.
-export const getObservationsByClass = async (classId) => {
+// Published observations for one class — used by the read-only "My
+// Feedback" / "My Progress" teacher pages, which should only ever show
+// finalized sessions, never someone's half-finished draft.
+export const getPublishedObservationsByClass = async (classId) => {
   const q = query(
     collection(db, 'observations'),
     where('classId', '==', classId),
@@ -246,14 +245,29 @@ export const getObservationsByClass = async (classId) => {
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
 }
 
+// ALL observations (draft + published) for one class — used by the
+// teacher's own management pages (New/All Observations, Generate Report,
+// Export) now that teachers can author observations too, and by the
+// admin's Teacher Observations analysis page. The Firestore rule for
+// observations only checks classId, so a single classId-filtered query is
+// provably safe and returns every status.
+export const getObservationsByClass = async (classId) => {
+  const q = query(collection(db, 'observations'), where('classId', '==', classId))
+  const snap = await getDocs(q)
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+}
+
 // ─── Reports ────────────────────────────────────────────────────────────────
 
-export const addReport = async (data, createdByUid) => {
+export const addReport = async (data, createdByUid, creatorRole = 'admin') => {
   const ref = await addDoc(collection(db, 'reports'), {
     ...data,
-    sharedWithTeacher: false,
-    sharedAt: null,
+    sharedWithTeacher: creatorRole === 'teacher', // a teacher's own report is visible to them immediately
+    sharedAt: creatorRole === 'teacher' ? serverTimestamp() : null,
     createdBy: createdByUid,
+    createdByRole: creatorRole, // 'admin' | 'teacher'
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })

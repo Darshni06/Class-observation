@@ -5,20 +5,40 @@ import { useToast } from '../contexts/ToastContext'
 import { logoutUser } from '../firebase/services'
 import { initials } from '../utils/helpers'
 
-const ADMIN_NAV = [
-  { to: '/admin',            icon: 'layout-dashboard', label: 'Dashboard',        end: true },
-  { to: '/admin/new',        icon: 'clipboard-plus',   label: 'New Observation' },
-  { to: '/admin/observations', icon: 'list-details',  label: 'All Observations' },
-  { to: '/admin/reports',    icon: 'sparkles',         label: 'Generate Report' },
-  { to: '/admin/export',     icon: 'file-export',      label: 'Export' },
-  { to: '/admin/teachers',   icon: 'users',            label: 'Teachers' },
-  { to: '/admin/classes',    icon: 'school',           label: 'Classes' },
+const ADMIN_NAV_GROUPS = [
+  {
+    label: 'Admin Portal',
+    items: [
+      { to: '/admin',            icon: 'layout-dashboard', label: 'Dashboard',        end: true },
+      { to: '/admin/new',        icon: 'clipboard-plus',   label: 'New Observation' },
+      { to: '/admin/observations', icon: 'list-details',  label: 'All Observations' },
+      { to: '/admin/reports',    icon: 'sparkles',         label: 'Generate Report' },
+      { to: '/admin/export',     icon: 'file-export',      label: 'Export' },
+      { to: '/admin/teacher-observations', icon: 'users-group', label: 'Teacher Observations' },
+      { to: '/admin/teachers',   icon: 'users',            label: 'Teachers' },
+      { to: '/admin/classes',    icon: 'school',           label: 'Classes' },
+    ],
+  },
 ]
 
-const TEACHER_NAV = [
-  { to: '/teacher',          icon: 'message-2',        label: 'My Feedback', end: true },
-  { to: '/teacher/progress', icon: 'chart-bar',        label: 'My Progress' },
-  { to: '/teacher/reports',  icon: 'file-text',        label: 'My Reports' },
+const TEACHER_NAV_GROUPS = [
+  {
+    label: 'Record & Report',
+    items: [
+      { to: '/teacher/new',            icon: 'clipboard-plus', label: 'New Observation' },
+      { to: '/teacher/observations',   icon: 'list-details',   label: 'All Observations' },
+      { to: '/teacher/generate-report', icon: 'sparkles',      label: 'Generate Report' },
+      { to: '/teacher/export',         icon: 'file-export',    label: 'Export' },
+    ],
+  },
+  {
+    label: 'My Overview',
+    items: [
+      { to: '/teacher',          icon: 'message-2', label: 'My Feedback', end: true },
+      { to: '/teacher/progress', icon: 'chart-bar',  label: 'My Progress' },
+      { to: '/teacher/reports',  icon: 'file-text',  label: 'My Reports' },
+    ],
+  },
 ]
 
 export default function Layout({ role }) {
@@ -27,7 +47,7 @@ export default function Layout({ role }) {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  const navItems = role === 'admin' ? ADMIN_NAV : TEACHER_NAV
+  const navGroups = role === 'admin' ? ADMIN_NAV_GROUPS : TEACHER_NAV_GROUPS
 
   const handleLogout = async () => {
     try {
@@ -67,21 +87,23 @@ export default function Layout({ role }) {
       <div className="app-body">
         <div className={`mobile-overlay ${sidebarOpen ? 'open' : ''}`} onClick={() => setSidebarOpen(false)} />
         <div className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-          <div className="sidebar-section">
-            <div className="sidebar-section-label">{role === 'admin' ? 'Admin Portal' : 'Teacher Portal'}</div>
-            {navItems.map(item => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) => `sidebar-item ${isActive ? 'active' : ''}`}
-                onClick={() => setSidebarOpen(false)}
-              >
-                <i className={`ti ti-${item.icon}`} />
-                {item.label}
-              </NavLink>
-            ))}
-          </div>
+          {navGroups.map(group => (
+            <div className="sidebar-section" key={group.label}>
+              <div className="sidebar-section-label">{group.label}</div>
+              {group.items.map(item => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) => `sidebar-item ${isActive ? 'active' : ''}`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <i className={`ti ti-${item.icon}`} />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          ))}
         </div>
 
         <div className="content">
