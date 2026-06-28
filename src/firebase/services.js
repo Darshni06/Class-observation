@@ -19,8 +19,10 @@ export const logoutUser = () => signOut(auth)
 
 export const resetPasswordEmail = (email) => sendPasswordResetEmail(auth, email)
 
-// Create a teacher account (admin use only).
-export const createTeacherAccount = async (email, password, { name, classId }) => {
+// Create a teacher account (admin use only). departmentId is always the
+// CREATING ADMIN's own department — a teacher always belongs to whichever
+// department the admin who made them belongs to.
+export const createTeacherAccount = async (email, password, { name, classId, departmentId }) => {
   const { initializeApp, getApps, deleteApp } = await import('firebase/app')
   const { getAuth, createUserWithEmailAndPassword } = await import('firebase/auth')
 
@@ -38,6 +40,7 @@ export const createTeacherAccount = async (email, password, { name, classId }) =
       name,
       role: 'teacher',
       classId: null,
+      departmentId,
       createdAt: serverTimestamp(),
     })
     if (classId) {
@@ -56,8 +59,15 @@ export const getUserProfile = async (uid) => {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
-export const getAllTeachers = async () => {
-  const q = query(collection(db, 'users'), where('role', '==', 'teacher'))
+// departmentId is required — an admin only ever sees teachers in their own
+// department, and the query must filter on it directly so Firestore can
+// verify the security rule without fetching anything out of scope.
+export const getAllTeachers = async (departmentId) => {
+  const q = query(
+    collection(db, 'users'),
+    where('role', '==', 'teacher'),
+    where('departmentId', '==', departmentId),
+  )
   const snap = await getDocs(q)
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
@@ -79,24 +89,27 @@ export const deleteTeacherProfile = async (uid) => {
 
 // ─── Classes ────────────────────────────────────────────────────────────────
 // A class can have MULTIPLE teachers (e.g. two co-teachers for one room).
-// Each teacher still belongs to exactly one class at a time.
+// Each teacher still belongs to exactly one class at a time. Every class
+// belongs to exactly one department, set at creation and never changed.
 
 const classDisplayName = (className, section) =>
   section ? `${className} - ${section}` : className
 
-export const getClasses = async () => {
-  const snap = await getDocs(collection(db, 'classes'))
+export const getClasses = async (departmentId) => {
+  const q = query(collection(db, 'classes'), where('departmentId', '==', departmentId))
+  const snap = await getDocs(q)
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName))
 }
 
-export const addClass = async ({ className, section, strength }) => {
+export const addClass = async ({ className, section, strength, departmentId }) => {
   const ref = await addDoc(collection(db, 'classes'), {
     className,
     section: section || '',
     displayName: classDisplayName(className, section),
     strength: Number(strength) || 0,
+    departmentId,
     teacherIds: [],
     teacherNames: [],
     createdAt: serverTimestamp(),
@@ -124,7 +137,10 @@ export const deleteClass = async (classId) => {
   await deleteDoc(doc(db, 'classes', classId))
 }
 
-// Moves a teacher onto a class (removing them from any previous class first).
+// Moves a teacher onto a class (removing them from any previous class
+// first). Also re-syncs the teacher's departmentId to the class's
+// departmentId as a safety net — in normal use they already match, since an
+// admin can only ever pick from teachers/classes in their own department.
 export const assignTeacherToClass = async (classId, teacherId) => {
   await runTransaction(db, async (tx) => {
     const teacherRef = doc(db, 'users', teacherId)
@@ -154,7 +170,7 @@ export const assignTeacherToClass = async (classId, teacherId) => {
     const newTeacherNames = Array.from(new Set([...(classData.teacherNames || []), teacherName]))
 
     tx.update(classRef, { teacherIds: newTeacherIds, teacherNames: newTeacherNames })
-    tx.update(teacherRef, { classId, updatedAt: serverTimestamp() })
+    tx.update(teacherRef, { classId, departmentId: classData.departmentId, updatedAt: serverTimestamp() })
   })
 }
 
@@ -183,6 +199,8 @@ export const removeTeacherFromClass = async (teacherId) => {
 // ─── Observations ───────────────────────────────────────────────────────────
 // Observations belong to a CLASS, not an individual teacher — one class, one
 // observation per session, visible to every teacher assigned to that class.
+// Every observation also carries its class's departmentId, denormalized at
+// creation, so department-scoped queries don't need an extra join/lookup.
 
 const withComputedScores = (data) => {
   const { categoryAverages, overallAverage } = computeAverages(data.scores)
@@ -194,6 +212,8 @@ const withComputedScores = (data) => {
   }
 }
 
+// `data` must already include `departmentId` (the page building the payload
+// sets it from the selected/own class's departmentId).
 export const addObservation = async (data, createdByUid, creatorRole = 'admin') => {
   const ref = await addDoc(collection(db, 'observations'), {
     ...withComputedScores(data),
@@ -221,10 +241,11 @@ export const getObservation = async (id) => {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
-// Full list — used by admin screens, filtered/sorted client-side.
-// Admin's Firestore rule allows reading everything regardless of status.
-export const getAllObservations = async () => {
-  const snap = await getDocs(collection(db, 'observations'))
+// Full list for one department — used by admin screens, filtered/sorted
+// further client-side (by class, status, date, search, etc).
+export const getAllObservations = async (departmentId) => {
+  const q = query(collection(db, 'observations'), where('departmentId', '==', departmentId))
+  const snap = await getDocs(q)
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
@@ -233,11 +254,12 @@ export const getAllObservations = async () => {
 // Published observations for one class — used by the read-only "My
 // Feedback" / "My Progress" teacher pages, which should only ever show
 // finalized sessions, never someone's half-finished draft.
-export const getPublishedObservationsByClass = async (classId) => {
+export const getPublishedObservationsByClass = async (classId, departmentId) => {
   const q = query(
     collection(db, 'observations'),
     where('classId', '==', classId),
     where('status', '==', 'published'),
+    where('departmentId', '==', departmentId),
   )
   const snap = await getDocs(q)
   return snap.docs
@@ -248,11 +270,13 @@ export const getPublishedObservationsByClass = async (classId) => {
 // ALL observations (draft + published) for one class — used by the
 // teacher's own management pages (New/All Observations, Generate Report,
 // Export) now that teachers can author observations too, and by the
-// admin's Teacher Observations analysis page. The Firestore rule for
-// observations only checks classId, so a single classId-filtered query is
-// provably safe and returns every status.
-export const getObservationsByClass = async (classId) => {
-  const q = query(collection(db, 'observations'), where('classId', '==', classId))
+// admin's Teacher Observations analysis page.
+export const getObservationsByClass = async (classId, departmentId) => {
+  const q = query(
+    collection(db, 'observations'),
+    where('classId', '==', classId),
+    where('departmentId', '==', departmentId),
+  )
   const snap = await getDocs(q)
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
@@ -261,6 +285,7 @@ export const getObservationsByClass = async (classId) => {
 
 // ─── Reports ────────────────────────────────────────────────────────────────
 
+// `data` must already include `departmentId`.
 export const addReport = async (data, createdByUid, creatorRole = 'admin') => {
   const ref = await addDoc(collection(db, 'reports'), {
     ...data,
@@ -295,21 +320,21 @@ export const getReport = async (id) => {
   return snap.exists() ? { id: snap.id, ...snap.data() } : null
 }
 
-export const getAllReports = async () => {
-  const snap = await getDocs(collection(db, 'reports'))
+export const getAllReports = async (departmentId) => {
+  const q = query(collection(db, 'reports'), where('departmentId', '==', departmentId))
+  const snap = await getDocs(q)
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
 }
 
 // Shared reports for one class — used by the teacher portal.
-// Same reasoning as getObservationsByClass: filter classId AND
-// sharedWithTeacher in the query itself.
-export const getReportsByClass = async (classId) => {
+export const getReportsByClass = async (classId, departmentId) => {
   const q = query(
     collection(db, 'reports'),
     where('classId', '==', classId),
     where('sharedWithTeacher', '==', true),
+    where('departmentId', '==', departmentId),
   )
   const snap = await getDocs(q)
   return snap.docs

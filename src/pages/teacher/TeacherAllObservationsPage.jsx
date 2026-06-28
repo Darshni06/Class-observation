@@ -27,7 +27,7 @@ export default function TeacherAllObservationsPage() {
 
   const load = async () => {
     if (!profile?.classId) { setObservations([]); setLoading(false); return }
-    const obs = await getObservationsByClass(profile.classId)
+    const obs = await getObservationsByClass(profile.classId, profile.departmentId)
     setObservations(obs)
     setLoading(false)
   }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import {
   getAllTeachers, getClasses, createTeacherAccount, updateTeacherProfile,
   deleteTeacherProfile, assignTeacherToClass, removeTeacherFromClass, resetPasswordEmail,
@@ -9,6 +10,7 @@ import { useToast } from '../../contexts/ToastContext'
 import { initials } from '../../utils/helpers'
 
 export default function TeachersPage() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [teachers, setTeachers] = useState([])
   const [classes, setClasses] = useState([])
@@ -18,12 +20,13 @@ export default function TeachersPage() {
   const toast = useToast()
 
   const load = async () => {
-    const [tch, cls] = await Promise.all([getAllTeachers(), getClasses()])
+    const deptId = profile?.departmentId
+    const [tch, cls] = await Promise.all([getAllTeachers(deptId), getClasses(deptId)])
     setTeachers(tch)
     setClasses(cls)
     setLoading(false)
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.departmentId])
 
   if (loading) return <PageSpinner label="Loading teachers…" />
 
@@ -70,7 +73,7 @@ export default function TeachersPage() {
       </div>
 
       {modal === 'add' && (
-        <AddTeacherModal classes={classes} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
+        <AddTeacherModal classes={classes} departmentId={profile?.departmentId} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
       )}
       {modal?.edit && (
         <EditTeacherModal teacher={modal.edit} classes={classes} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
@@ -101,7 +104,7 @@ export default function TeachersPage() {
   )
 }
 
-function AddTeacherModal({ classes, onClose, onSaved }) {
+function AddTeacherModal({ classes, departmentId, onClose, onSaved }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -117,7 +120,7 @@ function AddTeacherModal({ classes, onClose, onSaved }) {
     }
     setSaving(true)
     try {
-      await createTeacherAccount(email.trim(), password, { name: name.trim(), classId: classId || null })
+      await createTeacherAccount(email.trim(), password, { name: name.trim(), classId: classId || null, departmentId })
       toast.success(`Teacher account created for ${name.trim()}. Share the temporary password with them securely.`)
       onSaved()
     } catch (e2) {

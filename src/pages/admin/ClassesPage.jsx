@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { getClasses, getAllTeachers, addClass, updateClass, deleteClass, assignTeacherToClass, removeTeacherFromClass } from '../../firebase/services'
 import { PageSpinner, EmptyState, Modal, Pill } from '../../components/UI'
 import ConfirmModal from '../../components/ConfirmModal'
 import { useToast } from '../../contexts/ToastContext'
 
 export default function ClassesPage() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [classes, setClasses] = useState([])
   const [teachers, setTeachers] = useState([])
@@ -14,12 +16,13 @@ export default function ClassesPage() {
   const toast = useToast()
 
   const load = async () => {
-    const [cls, tch] = await Promise.all([getClasses(), getAllTeachers()])
+    const deptId = profile?.departmentId
+    const [cls, tch] = await Promise.all([getClasses(deptId), getAllTeachers(deptId)])
     setClasses(cls)
     setTeachers(tch)
     setLoading(false)
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.departmentId])
 
   if (loading) return <PageSpinner label="Loading classes…" />
 
@@ -67,10 +70,10 @@ export default function ClassesPage() {
       </div>
 
       {modal === 'add' && (
-        <ClassModal teachers={teachers} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
+        <ClassModal teachers={teachers} departmentId={profile?.departmentId} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
       )}
       {modal?.edit && (
-        <ClassModal teachers={teachers} existing={modal.edit} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
+        <ClassModal teachers={teachers} departmentId={profile?.departmentId} existing={modal.edit} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
       )}
 
       {toDelete && (
@@ -98,7 +101,7 @@ export default function ClassesPage() {
   )
 }
 
-function ClassModal({ teachers, existing, onClose, onSaved }) {
+function ClassModal({ teachers, existing, departmentId, onClose, onSaved }) {
   const [className, setClassName] = useState(existing?.className || '')
   const [section, setSection] = useState(existing?.section || '')
   const [strength, setStrength] = useState(existing?.strength ? String(existing.strength) : '')
@@ -128,7 +131,7 @@ function ClassModal({ teachers, existing, onClose, onSaved }) {
       if (existing) {
         await updateClass(existing.id, { className: className.trim(), section: section.trim(), strength })
       } else {
-        classId = await addClass({ className: className.trim(), section: section.trim(), strength })
+        classId = await addClass({ className: className.trim(), section: section.trim(), strength, departmentId })
       }
 
       const previousIds = existing?.teacherIds || []

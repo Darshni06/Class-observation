@@ -19,7 +19,7 @@ export default function MyReportsPage() {
     ;(async () => {
       try {
         if (!profile?.classId) { setReports([]); return }
-        const rep = await getReportsByClass(profile.classId)
+        const rep = await getReportsByClass(profile.classId, profile.departmentId)
         if (!cancelled) setReports(rep)
       } catch (e) {
         if (!cancelled) toast.error('Could not load reports: ' + e.message)

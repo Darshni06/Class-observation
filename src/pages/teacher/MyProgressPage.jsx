@@ -17,7 +17,7 @@ export default function MyProgressPage() {
     ;(async () => {
       try {
         if (!profile?.classId) { setObservations([]); return }
-        const obs = await getPublishedObservationsByClass(profile.classId)
+        const obs = await getPublishedObservationsByClass(profile.classId, profile.departmentId)
         if (!cancelled) setObservations(obs)
       } catch (e) {
         if (!cancelled) toast.error('Could not load progress: ' + e.message)

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getAllReports, getClasses } from '../../firebase/services'
 import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
 import { exportReportToWord } from '../../utils/exportWord'
@@ -10,6 +11,7 @@ import { formatDate, formatDateTime, observationStatus, round1 } from '../../uti
 // own observations for that same class — a simple analysis view, not a
 // replacement for either party's own pages.
 export default function TeacherObservationsAnalysisPage() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [observations, setObservations] = useState([])
   const [reports, setReports] = useState([])
@@ -18,7 +20,8 @@ export default function TeacherObservationsAnalysisPage() {
 
   useEffect(() => {
     (async () => {
-      const [obs, rep, cls] = await Promise.all([getAllObservations(), getAllReports(), getClasses()])
+      const deptId = profile?.departmentId
+      const [obs, rep, cls] = await Promise.all([getAllObservations(deptId), getAllReports(deptId), getClasses(deptId)])
       setObservations(obs)
       setReports(rep)
       setClasses(cls)

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getAllTeachers, getAllReports, getClasses } from '../../firebase/services'
 import { StatCard, PageSpinner, ProgressBarRow, EmptyState, Pill } from '../../components/UI'
 import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
@@ -12,11 +13,13 @@ export default function AdminDashboard() {
   const [reports, setReports] = useState([])
   const [classes, setClasses] = useState([])
   const navigate = useNavigate()
+  const { profile } = useAuth()
 
   useEffect(() => {
     (async () => {
+      const deptId = profile?.departmentId
       const [obs, tch, rep, cls] = await Promise.all([
-        getAllObservations(), getAllTeachers(), getAllReports(), getClasses(),
+        getAllObservations(deptId), getAllTeachers(deptId), getAllReports(deptId), getClasses(deptId),
       ])
       setObservations(obs)
       setTeachers(tch)
@@ -24,7 +27,7 @@ export default function AdminDashboard() {
       setClasses(cls)
       setLoading(false)
     })()
-  }, [])
+  }, [profile?.departmentId])
 
   if (loading) return <PageSpinner label="Loading dashboard…" />
 

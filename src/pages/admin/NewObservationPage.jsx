@@ -31,7 +31,7 @@ export default function NewObservationPage() {
 
   useEffect(() => {
     (async () => {
-      const cls = await getClasses()
+      const cls = await getClasses(profile?.departmentId)
       setClasses(cls)
 
       if (isEdit) {
@@ -79,6 +79,7 @@ export default function NewObservationPage() {
   const buildPayload = (status) => ({
     classId,
     classDisplayName: selectedClass?.displayName || '',
+    departmentId: profile?.departmentId,
     teacherIds: selectedClass?.teacherIds || [],
     teacherNames: selectedClass?.teacherNames || [],
     observerName: observerName.trim(),

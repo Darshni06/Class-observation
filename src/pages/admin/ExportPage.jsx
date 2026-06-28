@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getClasses, getAllReports } from '../../firebase/services'
 import { exportObservationsToExcel } from '../../utils/exportExcel'
 import { exportReportToWord, exportReportsToZip } from '../../utils/exportWord'
@@ -7,6 +8,7 @@ import { PageSpinner, EmptyState } from '../../components/UI'
 import { formatDate } from '../../utils/helpers'
 
 export default function ExportPage() {
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [observations, setObservations] = useState([])
   const [reports, setReports] = useState([])
@@ -23,7 +25,7 @@ export default function ExportPage() {
   useEffect(() => {
     (async () => {
       const [obs, rep, cls] = await Promise.all([
-        getAllObservations(), getAllReports(), getClasses(),
+        getAllObservations(profile?.departmentId), getAllReports(profile?.departmentId), getClasses(profile?.departmentId),
       ])
       setObservations(obs)
       setReports(rep)

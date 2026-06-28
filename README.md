@@ -22,18 +22,82 @@ This guide assumes no prior Firebase/Vercel experience — follow it top to bott
 
 ---
 
-## 0. If you're upgrading an existing deployment
+## 0. Adding department isolation (existing deployment → 2 departments)
 
-This version gives teachers full create/edit/delete access to observations
-and reports **for their own class only** (previously read-only), and adds an
-admin "Teacher Observations" comparison page. To pick this up on an existing
-Firebase project:
+This version adds full department isolation: every admin, teacher, class,
+observation, and report belongs to exactly one department, and nobody can
+see across departments — not even another admin. If you're setting this app
+up fresh, skip to **Step 1** and just remember to give your first admin a
+`departmentId` when you create them (Step 1.5 below covers this). If you
+already have data from before department support existed, follow this
+section first.
 
-1. **Redeploy `firestore.rules`** — Firebase Console → Firestore → Rules →
-   paste the new file → Publish. Without this, teachers will get
-   `permission-denied` the moment they try to save anything.
-2. No Firestore data migration is needed — older observations/reports
-   without a `createdByRole` field are automatically treated as admin-authored.
+### 0.1 Set your existing admin's department (manual, do this first)
+
+Firebase Console → Firestore → `users` → open your existing admin's
+document → add field `departmentId` (string) = `dept-1` → Save.
+
+### 0.2 Temporarily relax the rules
+
+You're about to bulk-update every existing document to add a `departmentId`
+field, but the new strict rules require that field to already match before
+allowing a write — a chicken-and-egg problem for a one-time migration.
+Firebase Console → Firestore → Rules → temporarily replace everything with:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+Publish. (This is wide open to any signed-in user — fine for a few minutes
+during migration, not fine to leave in place.)
+
+### 0.3 Run the migration script
+
+This stamps `departmentId: "dept-1"` onto every class, user, observation,
+and report that doesn't already have one (i.e. everything you created
+before today).
+
+```bash
+npm install
+export $(grep -v '^#' .env | xargs) MIGRATION_ADMIN_EMAIL=you@school.edu MIGRATION_ADMIN_PASSWORD=yourpassword
+node scripts/migrate-add-department.mjs
+```
+
+(Windows: set those two extra variables in PowerShell with `$env:MIGRATION_ADMIN_EMAIL="..."` etc instead of the `export` line, then run the same `node` command.)
+
+You should see it scan `classes`, `users`, `observations`, and `reports` and
+report how many documents it updated in each.
+
+### 0.4 Redeploy the real rules
+
+Firebase Console → Firestore → Rules → paste the actual `firestore.rules`
+from this project → Publish. From this point on, departments are fully
+isolated.
+
+### 0.5 Create the second department + its admin
+
+Same manual process as creating your first admin (Step 1.5 below), just
+with a different `departmentId`:
+
+1. **Authentication → Users → Add user** for the new admin → copy their UID.
+2. **Firestore → `users` → Add document** with that UID as the Document ID:
+   | Field | Type | Value |
+   |---|---|---|
+   | `name` | string | their name |
+   | `email` | string | their email |
+   | `role` | string | `admin` |
+   | `departmentId` | string | `dept-2` |
+3. They log in at `/login` as Admin, and from there everything is normal —
+   they create their own classes and teachers entirely through the app UI.
+   Every class/teacher/observation/report they create automatically gets
+   `departmentId: "dept-2"` and is invisible to department 1, and vice versa.
 
 ## 1. Create a Firebase project
 
@@ -82,6 +146,7 @@ accounts), so the very first admin must be created manually:
      | `name` | string | Your name |
      | `email` | string | The email you just used |
      | `role` | string | `admin` |
+     | `departmentId` | string | `dept-1` (or any short slug — this is the only thing that scopes what this admin can see) |
    - Click **Save**.
 
 You can now sign in to `/login` with that email/password, selecting the

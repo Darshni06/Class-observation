@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getClasses, deleteObservation } from '../../firebase/services'
 import { PageSpinner, EmptyState, Pill } from '../../components/UI'
 import ConfirmModal from '../../components/ConfirmModal'
@@ -14,6 +15,7 @@ export default function AllObservationsPage() {
   const [deleting, setDeleting] = useState(false)
   const navigate = useNavigate()
   const toast = useToast()
+  const { profile } = useAuth()
 
   const [fClass, setFClass] = useState('')
   const [fStatus, setFStatus] = useState('')
@@ -22,7 +24,8 @@ export default function AllObservationsPage() {
   const [search, setSearch] = useState('')
 
   const load = async () => {
-    const [obs, cls] = await Promise.all([getAllObservations(), getClasses()])
+    const deptId = profile?.departmentId
+    const [obs, cls] = await Promise.all([getAllObservations(deptId), getClasses(deptId)])
     setObservations(obs)
     setClasses(cls)
     setLoading(false)

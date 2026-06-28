@@ -22,7 +22,7 @@ export default function TeacherExportPage() {
     (async () => {
       if (!profile?.classId) { setLoading(false); return }
       const [obs, rep] = await Promise.all([
-        getObservationsByClass(profile.classId), getReportsByClass(profile.classId),
+        getObservationsByClass(profile.classId, profile.departmentId), getReportsByClass(profile.classId, profile.departmentId),
       ])
       setObservations(obs)
       setReports(rep)

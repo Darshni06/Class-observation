@@ -33,7 +33,8 @@ export default function GenerateReportPage() {
 
   useEffect(() => {
     (async () => {
-      const [cls, obs, rep] = await Promise.all([getClasses(), getAllObservations(), getAllReports()])
+      const deptId = profile?.departmentId
+      const [cls, obs, rep] = await Promise.all([getClasses(deptId), getAllObservations(deptId), getAllReports(deptId)])
       setClasses(cls)
       setAllObs(obs)
       setReports(rep)
@@ -96,6 +97,7 @@ export default function GenerateReportPage() {
     try {
       const reportData = {
         title: `${selectedClass?.displayName} — ${period.trim()}`,
+        departmentId: profile?.departmentId,
         classId,
         classDisplayName: selectedClass?.displayName || '',
         teacherIds: selectedClass?.teacherIds || [],

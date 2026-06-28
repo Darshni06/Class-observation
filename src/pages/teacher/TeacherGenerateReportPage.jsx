@@ -37,7 +37,7 @@ export default function TeacherGenerateReportPage() {
     (async () => {
       if (!profile?.classId) { setLoading(false); return }
       const [classes, obs, rep] = await Promise.all([
-        getClasses(), getObservationsByClass(profile.classId), getReportsByClass(profile.classId),
+        getClasses(profile.departmentId), getObservationsByClass(profile.classId, profile.departmentId), getReportsByClass(profile.classId, profile.departmentId),
       ])
       setMyClass(classes.find(c => c.id === profile.classId) || null)
       setClassObs(obs)
@@ -88,6 +88,7 @@ export default function TeacherGenerateReportPage() {
     try {
       const reportData = {
         title: `${myClass?.displayName} — ${period.trim()}`,
+        departmentId: profile?.departmentId,
         classId: myClass.id,
         classDisplayName: myClass.displayName,
         teacherIds: myClass.teacherIds || [],

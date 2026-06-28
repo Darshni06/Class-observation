@@ -32,7 +32,7 @@ export default function TeacherNewObservationPage() {
 
   useEffect(() => {
     (async () => {
-      const classes = await getClasses()
+      const classes = await getClasses(profile?.departmentId)
       const mine = classes.find(c => c.id === profile?.classId) || null
       setMyClass(mine)
 
@@ -78,6 +78,7 @@ export default function TeacherNewObservationPage() {
   const buildPayload = (status) => ({
     classId: myClass.id,
     classDisplayName: myClass.displayName,
+    departmentId: profile?.departmentId,
     teacherIds: myClass.teacherIds || [],
     teacherNames: myClass.teacherNames || [],
     observerName: observerName.trim(),

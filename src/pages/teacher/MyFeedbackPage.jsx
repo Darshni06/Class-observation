@@ -18,7 +18,7 @@ export default function MyFeedbackPage() {
     ;(async () => {
       try {
         if (!profile?.classId) { setObservations([]); return }
-        const obs = await getPublishedObservationsByClass(profile.classId)
+        const obs = await getPublishedObservationsByClass(profile.classId, profile.departmentId)
         if (cancelled) return
         setObservations(obs)
         if (obs.length) setActiveId(obs[0].id)
