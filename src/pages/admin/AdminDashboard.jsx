@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getAllTeachers, getAllReports, getClasses } from '../../firebase/services'
-import { StatCard, PageSpinner, ProgressBarRow, EmptyState, Pill } from '../../components/UI'
-import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
+import { StatCard, PageSpinner, EmptyState, Pill } from '../../components/UI'
+import { OBSERVATION_CATEGORIES, TOTAL_MARKS } from '../../data/observationParams'
 import { formatDate, observationStatus, round1 } from '../../utils/helpers'
 
 export default function AdminDashboard() {
@@ -31,15 +31,21 @@ export default function AdminDashboard() {
 
   if (loading) return <PageSpinner label="Loading dashboard…" />
 
-  const scoredCats = OBSERVATION_CATEGORIES.filter(c => c.scored)
-  const categoryAvgAcrossAll = {}
-  scoredCats.forEach(cat => {
-    const vals = observations.map(o => o.categoryAverages?.[cat.id]).filter(v => v != null)
-    categoryAvgAcrossAll[cat.id] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
-  })
-
   const recent = observations.slice(0, 6)
   const thisMonthCount = observations.filter(o => o.date?.slice(0, 7) === new Date().toISOString().slice(0, 7)).length
+
+  // Average marks per category across all observations
+  const categoryAvgMarks = {}
+  OBSERVATION_CATEGORIES.forEach(cat => {
+    const vals = observations.map(o => o.categoryMarks?.[cat.id]).filter(v => v != null)
+    categoryAvgMarks[cat.id] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+  })
+
+  // Overall avg total marks
+  const totalMarksVals = observations.map(o => o.totalMarks).filter(v => v != null)
+  const avgTotalMarks = totalMarksVals.length
+    ? totalMarksVals.reduce((a, b) => a + b, 0) / totalMarksVals.length
+    : null
 
   return (
     <div>
@@ -58,15 +64,36 @@ export default function AdminDashboard() {
         <StatCard label="Teachers" value={teachers.length} icon="users" color="purple" />
         <StatCard label="Classes" value={classes.length} icon="school" color="amber" />
         <StatCard label="Reports Generated" value={reports.length} icon="sparkles" color="green" />
+        {avgTotalMarks != null && (
+          <StatCard label="Avg Total Marks" value={`${round1(avgTotalMarks)} / ${TOTAL_MARKS}`} icon="chart-bar" color="purple" />
+        )}
       </div>
 
       <div className="form-grid-2" style={{ alignItems: 'flex-start' }}>
         <div className="card">
-          <div className="card-header"><span className="card-title">Average score by category</span></div>
+          <div className="card-header"><span className="card-title">Average marks by category</span></div>
           <div className="card-body">
-            {scoredCats.map(cat => (
-              <ProgressBarRow key={cat.id} label={cat.label} value={categoryAvgAcrossAll[cat.id] != null ? round1(categoryAvgAcrossAll[cat.id]) : null} />
-            ))}
+            {OBSERVATION_CATEGORIES.map(cat => {
+              const val = categoryAvgMarks[cat.id]
+              const pct = val != null ? (val / cat.maxMarks) * 100 : 0
+              const color = pct >= 66 ? 'var(--green-600)' : pct >= 33 ? 'var(--amber-600)' : 'var(--red-700)'
+              return (
+                <div className="progress-bar-wrap" key={cat.id}>
+                  <div className="progress-bar-label">
+                    <span style={{ fontSize: 11 }}>{cat.label}</span>
+                    <span>{val != null ? `${round1(val)} / ${cat.maxMarks}` : '—'}</span>
+                  </div>
+                  <div className="progress-bar-track">
+                    <div className="progress-bar-fill" style={{ width: `${pct}%`, background: color }} />
+                  </div>
+                </div>
+              )
+            })}
+            {avgTotalMarks != null && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)', fontSize: 13, fontWeight: 600, color: 'var(--green-800)' }}>
+                Overall average: {round1(avgTotalMarks)} / {TOTAL_MARKS} marks
+              </div>
+            )}
           </div>
         </div>
 
@@ -81,7 +108,7 @@ export default function AdminDashboard() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>Date</th><th>Class</th><th>Teacher(s)</th><th>Status</th></tr>
+                    <tr><th>Date</th><th>Class</th><th>Marks</th><th>Status</th></tr>
                   </thead>
                   <tbody>
                     {recent.map(o => {
@@ -90,7 +117,7 @@ export default function AdminDashboard() {
                         <tr key={o.id} style={{ cursor: 'pointer' }} onClick={() => navigate(`/admin/observations/${o.id}/edit`)}>
                           <td>{formatDate(o.date)}</td>
                           <td>{o.classDisplayName}</td>
-                          <td>{(o.teacherNames || []).join(', ') || '—'}</td>
+                          <td>{o.totalMarks != null ? `${round1(o.totalMarks)} / ${TOTAL_MARKS}` : '—'}</td>
                           <td><Pill label={st.label} cls={st.cls} /></td>
                         </tr>
                       )

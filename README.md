@@ -66,7 +66,7 @@ before today).
 
 ```bash
 npm install
-export $(grep -v '^#' .env | xargs) MIGRATION_ADMIN_EMAIL=you@school.edu MIGRATION_ADMIN_PASSWORD=yourpassword
+export $(grep -v '^#' .env | xargs) MIGRATION_ADMIN_EMAIL=latha.s@kamalaniketan.com MIGRATION_ADMIN_PASSWORD=123456
 node scripts/migrate-add-department.mjs
 ```
 

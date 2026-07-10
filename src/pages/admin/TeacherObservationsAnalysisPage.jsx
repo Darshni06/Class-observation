@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getAllReports, getClasses } from '../../firebase/services'
-import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
+import { OBSERVATION_CATEGORIES, TOTAL_MARKS } from '../../data/observationParams'
 import { exportReportToWord } from '../../utils/exportWord'
-import { PageSpinner, EmptyState, ProgressBarRow, Pill } from '../../components/UI'
+import { PageSpinner, EmptyState, Pill } from '../../components/UI'
 import { formatDate, formatDateTime, observationStatus, round1 } from '../../utils/helpers'
 
-// Lets the admin see what teachers have recorded about their OWN class
-// (self-observations), and compares it side-by-side against the admin's
-// own observations for that same class — a simple analysis view, not a
-// replacement for either party's own pages.
 export default function TeacherObservationsAnalysisPage() {
   const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -21,32 +17,36 @@ export default function TeacherObservationsAnalysisPage() {
   useEffect(() => {
     (async () => {
       const deptId = profile?.departmentId
-      const [obs, rep, cls] = await Promise.all([getAllObservations(deptId), getAllReports(deptId), getClasses(deptId)])
+      const [obs, rep, cls] = await Promise.all([
+        getAllObservations(deptId), getAllReports(deptId), getClasses(deptId),
+      ])
       setObservations(obs)
       setReports(rep)
       setClasses(cls)
-      // Default to the first class that actually has a teacher-submitted observation
-      const firstWithTeacherObs = cls.find(c => obs.some(o => o.classId === c.id && o.createdByRole === 'teacher'))
+      const firstWithTeacherObs = cls.find(c =>
+        obs.some(o => o.classId === c.id && o.createdByRole === 'teacher')
+      )
       setClassId(firstWithTeacherObs?.id || cls[0]?.id || '')
       setLoading(false)
     })()
-  }, [])
+  }, [profile?.departmentId])
 
-  const scoredCats = OBSERVATION_CATEGORIES.filter(c => c.scored)
-
-  const classObs = useMemo(() => observations.filter(o => o.classId === classId), [observations, classId])
-  // Observations created before this feature existed have no createdByRole — treat as admin's own.
-  const adminObs   = useMemo(() => classObs.filter(o => (o.createdByRole || 'admin') === 'admin'), [classObs])
-  const teacherObs = useMemo(() => classObs.filter(o => o.createdByRole === 'teacher'), [classObs])
+  const classObs    = useMemo(() => observations.filter(o => o.classId === classId), [observations, classId])
+  const adminObs    = useMemo(() => classObs.filter(o => (o.createdByRole || 'admin') === 'admin'), [classObs])
+  const teacherObs  = useMemo(() => classObs.filter(o => o.createdByRole === 'teacher'), [classObs])
   const teacherReports = useMemo(() => reports.filter(r => r.classId === classId && r.createdByRole === 'teacher'), [reports, classId])
 
-  const avgFor = (list, catId) => {
-    const vals = list.map(o => o.categoryAverages?.[catId]).filter(v => v != null)
+  // Average marks per category for a list of observations
+  const avgMarksFor = (list, catId) => {
+    const vals = list.map(o => o.categoryMarks?.[catId]).filter(v => v != null)
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+  }
+  const avgTotalFor = (list) => {
+    const vals = list.map(o => o.totalMarks).filter(v => v != null)
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
   }
 
   const selectedClass = classes.find(c => c.id === classId)
-  const classesWithTeacherData = classes.filter(c => observations.some(o => o.classId === c.id && o.createdByRole === 'teacher'))
 
   if (loading) return <PageSpinner label="Loading…" />
 
@@ -54,7 +54,7 @@ export default function TeacherObservationsAnalysisPage() {
     <div>
       <div className="page-header">
         <h1>Teacher Observations</h1>
-        <p>Review what teachers have recorded about their own class, and compare it against your observations for the same class.</p>
+        <p>Review what teachers have recorded about their own class, and compare it against your observations — marks out of {TOTAL_MARKS}.</p>
       </div>
 
       <div className="card">
@@ -65,7 +65,7 @@ export default function TeacherObservationsAnalysisPage() {
               <option value="">Select class…</option>
               {classes.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.displayName}{classesWithTeacherData.some(cc => cc.id === c.id) ? ' (has teacher submissions)' : ''}
+                  {c.displayName}{observations.some(o => o.classId === c.id && o.createdByRole === 'teacher') ? ' ★' : ''}
                 </option>
               ))}
             </select>
@@ -81,10 +81,16 @@ export default function TeacherObservationsAnalysisPage() {
             <div className="stat-card">
               <div className="label">Admin observations</div>
               <div className="value">{adminObs.length}</div>
+              {avgTotalFor(adminObs) != null && (
+                <div className="trend">Avg {round1(avgTotalFor(adminObs))} / {TOTAL_MARKS} marks</div>
+              )}
             </div>
             <div className="stat-card">
               <div className="label">Teacher self-observations</div>
               <div className="value">{teacherObs.length}</div>
+              {avgTotalFor(teacherObs) != null && (
+                <div className="trend">Avg {round1(avgTotalFor(teacherObs))} / {TOTAL_MARKS} marks</div>
+              )}
             </div>
             <div className="stat-card">
               <div className="label">Teacher-generated reports</div>
@@ -93,18 +99,59 @@ export default function TeacherObservationsAnalysisPage() {
           </div>
 
           <div className="card">
-            <div className="card-header"><span className="card-title">Average score by category — Admin vs Teacher self-assessment</span></div>
+            <div className="card-header"><span className="card-title">Marks by category — Admin vs Teacher self-assessment</span></div>
             <div className="card-body">
               {teacherObs.length === 0 ? (
                 <EmptyState icon="chart-bar" message={`${selectedClass?.displayName || 'This class'} has no teacher-submitted observations yet.`} />
               ) : (
-                scoredCats.map(cat => (
-                  <div key={cat.id} style={{ marginBottom: 18 }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-800)', marginBottom: 6 }}>{cat.label}</div>
-                    <ProgressBarRow label="Admin" value={round1(avgFor(adminObs, cat.id))} />
-                    <ProgressBarRow label="Teacher (self)" value={round1(avgFor(teacherObs, cat.id))} />
+                OBSERVATION_CATEGORIES.map(cat => {
+                  const adminVal   = avgMarksFor(adminObs, cat.id)
+                  const teacherVal = avgMarksFor(teacherObs, cat.id)
+                  const toBar = (val) => val != null ? (val / cat.maxMarks) * 100 : 0
+
+                  return (
+                    <div key={cat.id} style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-800)', marginBottom: 6 }}>
+                        {cat.label}
+                        <span style={{ color: 'var(--gray-400)', fontWeight: 400, marginLeft: 6, fontSize: 11 }}>
+                          max {cat.maxMarks} marks ({Math.round(cat.weightPercent * 100)}%)
+                        </span>
+                      </div>
+                      {/* Admin bar */}
+                      <div className="progress-bar-wrap" style={{ marginBottom: 4 }}>
+                        <div className="progress-bar-label">
+                          <span style={{ fontSize: 11 }}>Admin</span>
+                          <span>{adminVal != null ? `${round1(adminVal)} / ${cat.maxMarks}` : '—'}</span>
+                        </div>
+                        <div className="progress-bar-track">
+                          <div className="progress-bar-fill" style={{ width: `${toBar(adminVal)}%`, background: 'var(--purple-700)' }} />
+                        </div>
+                      </div>
+                      {/* Teacher bar */}
+                      <div className="progress-bar-wrap">
+                        <div className="progress-bar-label">
+                          <span style={{ fontSize: 11 }}>Teacher (self)</span>
+                          <span>{teacherVal != null ? `${round1(teacherVal)} / ${cat.maxMarks}` : '—'}</span>
+                        </div>
+                        <div className="progress-bar-track">
+                          <div className="progress-bar-fill" style={{ width: `${toBar(teacherVal)}%`, background: 'var(--green-600)' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+              {teacherObs.length > 0 && (
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)', fontSize: 13, fontWeight: 600 }}>
+                  <div style={{ display: 'flex', gap: 32 }}>
+                    <span style={{ color: 'var(--purple-700)' }}>
+                      Admin avg total: {avgTotalFor(adminObs) != null ? `${round1(avgTotalFor(adminObs))} / ${TOTAL_MARKS}` : '—'}
+                    </span>
+                    <span style={{ color: 'var(--green-700)' }}>
+                      Teacher (self) avg total: {avgTotalFor(teacherObs) != null ? `${round1(avgTotalFor(teacherObs))} / ${TOTAL_MARKS}` : '—'}
+                    </span>
                   </div>
-                ))
+                </div>
               )}
             </div>
           </div>
@@ -116,7 +163,9 @@ export default function TeacherObservationsAnalysisPage() {
             ) : (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Date</th><th>Observer</th><th>Overall Avg</th><th>Status</th></tr></thead>
+                  <thead>
+                    <tr><th>Date</th><th>Observer</th><th>Total Marks</th><th>Status</th></tr>
+                  </thead>
                   <tbody>
                     {teacherObs.map(o => {
                       const st = observationStatus(o)
@@ -124,7 +173,7 @@ export default function TeacherObservationsAnalysisPage() {
                         <tr key={o.id}>
                           <td>{formatDate(o.date)}</td>
                           <td>{o.observerName}</td>
-                          <td>{o.overallAverage != null ? `${round1(o.overallAverage)} / 3` : '—'}</td>
+                          <td>{o.totalMarks != null ? `${round1(o.totalMarks)} / ${TOTAL_MARKS}` : '—'}</td>
                           <td><Pill label={st.label} cls={st.cls} /></td>
                         </tr>
                       )
@@ -142,13 +191,13 @@ export default function TeacherObservationsAnalysisPage() {
             ) : (
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Period</th><th>Created</th><th>Overall Avg</th><th></th></tr></thead>
+                  <thead><tr><th>Period</th><th>Created</th><th>Avg Total Marks</th><th></th></tr></thead>
                   <tbody>
                     {teacherReports.map(r => (
                       <tr key={r.id}>
                         <td>{r.period}</td>
                         <td>{formatDateTime(r.createdAt)}</td>
-                        <td>{r.avgScore != null ? `${round1(r.avgScore)} / 3` : '—'}</td>
+                        <td>{r.avgScore != null ? `${round1(r.avgScore)} / ${TOTAL_MARKS}` : '—'}</td>
                         <td>
                           <button className="btn btn-sm btn-export" onClick={() => exportReportToWord(r)}>
                             <i className="ti ti-file-type-doc" /> Word

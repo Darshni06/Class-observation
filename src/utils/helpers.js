@@ -24,13 +24,16 @@ export const formatDateTime = (ts) => {
   return format(new Date(ts.seconds * 1000), 'dd MMM yyyy, h:mm a')
 }
 
+// round1 and round2 are also exported from observationParams.js —
+// these copies here keep the existing import paths in pages working.
 export const round1 = (n) => (n === null || n === undefined ? null : Math.round(n * 10) / 10)
+export const round2 = (n) => (n === null || n === undefined ? null : Math.round(n * 100) / 100)
 
 // Observation status pill: draft | complete | partial
 export const observationStatus = (obs) => {
-  if (obs.status !== 'published') return { key: 'draft', label: 'Draft', cls: 'pill-gray' }
-  if (obs.fullyScored) return { key: 'complete', label: 'Complete', cls: 'pill-green' }
-  return { key: 'partial', label: 'Partial', cls: 'pill-amber' }
+  if (obs.status !== 'published') return { key: 'draft',    label: 'Draft',    cls: 'pill-gray'  }
+  if (obs.fullyScored)            return { key: 'complete', label: 'Complete', cls: 'pill-green' }
+  return                                 { key: 'partial',  label: 'Partial',  cls: 'pill-amber' }
 }
 
 export const levelClass = (level) => {
@@ -43,6 +46,5 @@ export const levelClass = (level) => {
 export const initials = (name = '') =>
   name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?'
 
-export const todayISO = () => format(new Date(), 'yyyy-MM-dd')
-
+export const todayISO  = () => format(new Date(), 'yyyy-MM-dd')
 export const nowTime24 = () => format(new Date(), 'HH:mm')
