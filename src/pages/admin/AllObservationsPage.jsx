@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getClasses, deleteObservation } from '../../firebase/services'
+import { TOTAL_MARKS } from '../../data/observationParams'
 import { PageSpinner, EmptyState, Pill } from '../../components/UI'
 import ConfirmModal from '../../components/ConfirmModal'
 import { useToast } from '../../contexts/ToastContext'
@@ -31,17 +32,14 @@ export default function AllObservationsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.departmentId])
 
   const filtered = useMemo(() => {
     return observations.filter(o => {
       if (fClass && o.classId !== fClass) return false
-      if (fStatus) {
-        const st = observationStatus(o).key
-        if (st !== fStatus) return false
-      }
+      if (fStatus) { if (observationStatus(o).key !== fStatus) return false }
       if (fFrom && o.date < fFrom) return false
-      if (fTo && o.date > fTo) return false
+      if (fTo   && o.date > fTo)   return false
       if (search) {
         const hay = `${(o.teacherNames || []).join(' ')} ${o.classDisplayName} ${o.observerName}`.toLowerCase()
         if (!hay.includes(search.toLowerCase())) return false
@@ -94,7 +92,7 @@ export default function AllObservationsPage() {
         <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} title="To date" />
         {(fClass || fStatus || fFrom || fTo || search) && (
           <button className="btn btn-sm" onClick={() => { setFClass(''); setFStatus(''); setFFrom(''); setFTo(''); setSearch('') }}>
-            <i className="ti ti-x" /> Clear filters
+            <i className="ti ti-x" /> Clear
           </button>
         )}
       </div>
@@ -108,7 +106,7 @@ export default function AllObservationsPage() {
               <thead>
                 <tr>
                   <th>Date</th><th>Class</th><th>Teacher(s)</th><th>Observer</th>
-                  <th>Overall Avg</th><th>Status</th><th></th>
+                  <th>Marks / {TOTAL_MARKS}</th><th>Status</th><th></th>
                 </tr>
               </thead>
               <tbody>
@@ -120,7 +118,11 @@ export default function AllObservationsPage() {
                       <td>{o.classDisplayName}</td>
                       <td>{(o.teacherNames || []).join(', ') || '—'}</td>
                       <td>{o.observerName}</td>
-                      <td>{o.overallAverage != null ? `${round1(o.overallAverage)} / 3` : '—'}</td>
+                      <td>
+                        {o.totalMarks != null
+                          ? <span className="marks-chip">{round1(o.totalMarks)} / {TOTAL_MARKS}</span>
+                          : <span style={{ color: 'var(--gray-400)' }}>—</span>}
+                      </td>
                       <td><Pill label={st.label} cls={st.cls} /></td>
                       <td>
                         <div className="btn-group">

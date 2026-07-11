@@ -1,16 +1,41 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import {
   getClasses, addObservation, updateObservation, getObservation,
 } from '../../firebase/services'
-import { OBSERVATION_CATEGORIES, buildBlankScores } from '../../data/observationParams'
+import { OBSERVATION_CATEGORIES, TOTAL_MARKS, buildBlankScores } from '../../data/observationParams'
 import { PageSpinner, Pill } from '../../components/UI'
 import { todayISO, nowTime24 } from '../../utils/helpers'
 
-// Same form as the admin's New/Edit Observation page, but the class is fixed
-// to the teacher's own assigned class — no class picker needed.
+// Parses "3 – X / 2 – Y / 1 – Z" into [{num, text}, ...]
+function parsedScale(scale) {
+  if (!scale) return []
+  return scale.split(' / ').map(s => s.trim()).map(part => ({
+    num: part.match(/^(\d)/)?.[1] || null,
+    text: part,
+  }))
+}
+
+function ScaleCriteria({ scale }) {
+  if (!scale) return (
+    <div style={{ fontSize: 10, color: 'var(--gray-400)', fontStyle: 'italic', marginTop: 4 }}>
+      Narrative only — no level required.
+    </div>
+  )
+  const colorClass = { '3': 'obs-scale-line-3', '2': 'obs-scale-line-2', '1': 'obs-scale-line-1' }
+  return (
+    <div className="obs-scale-criteria">
+      {parsedScale(scale).map((part, i) => (
+        <div key={i} className={`obs-scale-line ${colorClass[part.num] || ''}`}>
+          {part.text}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function TeacherNewObservationPage() {
   const { id } = useParams()
   const isEdit = Boolean(id)
@@ -23,10 +48,10 @@ export default function TeacherNewObservationPage() {
   const [myClass, setMyClass] = useState(null)
 
   const [observerName, setObserverName] = useState('')
-  const [date, setDate]             = useState(todayISO())
-  const [time, setTime]             = useState(nowTime24())
+  const [date, setDate]                 = useState(todayISO())
+  const [time, setTime]                 = useState(nowTime24())
   const [durationMins, setDurationMins] = useState('')
-  const [scores, setScores]         = useState(buildBlankScores())
+  const [scores, setScores]             = useState(buildBlankScores())
   const [positivePoints, setPositivePoints] = useState('')
   const [areasToImprove, setAreasToImprove] = useState('')
 
@@ -79,14 +104,12 @@ export default function TeacherNewObservationPage() {
     classId: myClass.id,
     classDisplayName: myClass.displayName,
     departmentId: profile?.departmentId,
-    teacherIds: myClass.teacherIds || [],
+    teacherIds:   myClass.teacherIds   || [],
     teacherNames: myClass.teacherNames || [],
     observerName: observerName.trim(),
-    date,
-    time,
+    date, time,
     durationMins: durationMins ? Number(durationMins) : null,
-    status,
-    scores,
+    status, scores,
     positivePoints: positivePoints.trim(),
     areasToImprove: areasToImprove.trim(),
   })
@@ -118,7 +141,11 @@ export default function TeacherNewObservationPage() {
     <div>
       <div className="page-header">
         <h1>{isEdit ? 'Edit Observation' : 'New Observation'}</h1>
-        <p>Record a classroom observation session for your class. Level scale: 3 = Good · 2 = Average · 1 = Needs improvement.</p>
+        <p>
+          Record a classroom observation session for your class.
+          Scoring: 3 = Good · 2 = Average · 1 = Needs improvement.
+          Total marks: <strong>{TOTAL_MARKS}</strong>.
+        </p>
       </div>
 
       <div className="card">
@@ -167,26 +194,41 @@ export default function TeacherNewObservationPage() {
             <div className="obs-section-label">
               <i className={`ti ti-${cat.icon}`} />
               {cat.label}
-              <span className="scored-tag">{cat.scored ? 'Included in averages' : 'Administrative record'}</span>
+              <span className="obs-section-marks">{cat.maxMarks} marks</span>
+              <span className="scored-tag">Included in averages</span>
             </div>
+
             <div className="col-header">
-              <span>Parameter</span><span>Description</span><span>Level</span><span>Remarks</span>
+              <span>Parameter</span>
+              <span>Description</span>
+              <span>Level &amp; Criteria</span>
+              <span>Remarks</span>
             </div>
+
             {cat.params.map(p => (
               <div className="obs-param-row" key={p.id}>
                 <div className="obs-param-name">{p.name}</div>
                 <div className="obs-param-desc">{p.description}</div>
                 <div className="obs-level-col">
-                  <select
-                    className="obs-level-select"
-                    value={scores[cat.id]?.[p.id]?.level ?? ''}
-                    onChange={(e) => setLevel(cat.id, p.id, e.target.value === '' ? null : Number(e.target.value))}
-                  >
-                    <option value="">—</option>
-                    <option value="3">3</option>
-                    <option value="2">2</option>
-                    <option value="1">1</option>
-                  </select>
+                  {p.scorable !== false ? (
+                    <>
+                      <select
+                        className="obs-level-select"
+                        value={scores[cat.id]?.[p.id]?.level ?? ''}
+                        onChange={(e) =>
+                          setLevel(cat.id, p.id, e.target.value === '' ? null : Number(e.target.value))
+                        }
+                      >
+                        <option value="">— select —</option>
+                        <option value="3">3</option>
+                        <option value="2">2</option>
+                        <option value="1">1</option>
+                      </select>
+                      <ScaleCriteria scale={p.scale} />
+                    </>
+                  ) : (
+                    <ScaleCriteria scale={null} />
+                  )}
                 </div>
                 <textarea
                   className="obs-remark-textarea"

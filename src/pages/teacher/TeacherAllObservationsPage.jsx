@@ -2,28 +2,26 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { getObservationsByClass, deleteObservation } from '../../firebase/services'
+import { TOTAL_MARKS } from '../../data/observationParams'
 import { PageSpinner, EmptyState, Pill } from '../../components/UI'
 import ConfirmModal from '../../components/ConfirmModal'
 import { useToast } from '../../contexts/ToastContext'
 import { formatDate, observationStatus, round1 } from '../../utils/helpers'
 
-// Same idea as the admin's All Observations page, but scoped to the
-// teacher's own class — no class/teacher filter needed since there's only
-// ever one class in view.
 export default function TeacherAllObservationsPage() {
   const { profile } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
 
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]   = useState(true)
   const [observations, setObservations] = useState([])
   const [toDelete, setToDelete] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
   const [fStatus, setFStatus] = useState('')
-  const [fFrom, setFFrom] = useState('')
-  const [fTo, setFTo] = useState('')
-  const [search, setSearch] = useState('')
+  const [fFrom, setFFrom]     = useState('')
+  const [fTo, setFTo]         = useState('')
+  const [search, setSearch]   = useState('')
 
   const load = async () => {
     if (!profile?.classId) { setObservations([]); setLoading(false); return }
@@ -36,12 +34,9 @@ export default function TeacherAllObservationsPage() {
 
   const filtered = useMemo(() => {
     return observations.filter(o => {
-      if (fStatus) {
-        const st = observationStatus(o).key
-        if (st !== fStatus) return false
-      }
+      if (fStatus) { if (observationStatus(o).key !== fStatus) return false }
       if (fFrom && o.date < fFrom) return false
-      if (fTo && o.date > fTo) return false
+      if (fTo   && o.date > fTo)   return false
       if (search) {
         const hay = `${o.observerName} ${(o.teacherNames || []).join(' ')}`.toLowerCase()
         if (!hay.includes(search.toLowerCase())) return false
@@ -88,7 +83,7 @@ export default function TeacherAllObservationsPage() {
       </div>
 
       <div className="filter-bar">
-        <input type="text" placeholder="Search observer, teacher…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ minWidth: 220 }} />
+        <input type="text" placeholder="Search observer…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ minWidth: 200 }} />
         <select value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -99,7 +94,7 @@ export default function TeacherAllObservationsPage() {
         <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} title="To date" />
         {(fStatus || fFrom || fTo || search) && (
           <button className="btn btn-sm" onClick={() => { setFStatus(''); setFFrom(''); setFTo(''); setSearch('') }}>
-            <i className="ti ti-x" /> Clear filters
+            <i className="ti ti-x" /> Clear
           </button>
         )}
       </div>
@@ -111,7 +106,10 @@ export default function TeacherAllObservationsPage() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Date</th><th>Observer</th><th>Overall Avg</th><th>Status</th><th></th></tr>
+                <tr>
+                  <th>Date</th><th>Observer</th>
+                  <th>Marks / {TOTAL_MARKS}</th><th>Status</th><th></th>
+                </tr>
               </thead>
               <tbody>
                 {filtered.map(o => {
@@ -120,7 +118,11 @@ export default function TeacherAllObservationsPage() {
                     <tr key={o.id}>
                       <td>{formatDate(o.date)}</td>
                       <td>{o.observerName}</td>
-                      <td>{o.overallAverage != null ? `${round1(o.overallAverage)} / 3` : '—'}</td>
+                      <td>
+                        {o.totalMarks != null
+                          ? <span className="marks-chip">{round1(o.totalMarks)} / {TOTAL_MARKS}</span>
+                          : <span style={{ color: 'var(--gray-400)' }}>—</span>}
+                      </td>
                       <td><Pill label={st.label} cls={st.cls} /></td>
                       <td>
                         <div className="btn-group">

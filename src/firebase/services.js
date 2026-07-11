@@ -203,16 +203,17 @@ export const removeTeacherFromClass = async (teacherId) => {
 // creation, so department-scoped queries don't need an extra join/lookup.
 
 const withComputedScores = (data) => {
-  const { categoryAverages, categoryMarks, totalMarks, overallAverage } = computeAverages(data.scores)
-  return {
-    ...data,
-    categoryAverages,
-    categoryMarks,
-    totalMarks,
-    overallAverage,
-    fullyScored: isFullyScored(data.scores),
-  }
-}
+      const { categoryAverages, categoryMarks, totalMarks, overallAverage } = computeAverages(data.scores)
+      return {
+        ...data,
+        categoryAverages,
+        categoryMarks,
+        totalMarks,
+        overallAverage,
+        fullyScored: isFullyScored(data.scores),
+      }
+    }
+
 
 // `data` must already include `departmentId` (the page building the payload
 // sets it from the selected/own class's departmentId).
