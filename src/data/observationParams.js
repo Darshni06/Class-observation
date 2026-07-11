@@ -336,7 +336,7 @@ export const OBSERVATION_CATEGORIES = [
         id: 'mp_knowledge',
         name: 'Knowledge of Children',
         description: "Adults demonstrate awareness of each child's developmental level, interests, current lessons, and next presentations.",
-        scale: '3 – Strong understanding of all children / 2 – Good understanding of most children / 1 – Limited understanding of children's levels',
+        scale: "3 – Strong understanding of all children / 2 – Good understanding of most children / 1 – Limited understanding of children's levels",
         scorable: true,
       },
       {
