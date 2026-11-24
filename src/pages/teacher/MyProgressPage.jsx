@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import { getPublishedObservationsByClass } from '../../firebase/services'
-import { OBSERVATION_CATEGORIES, TOTAL_MARKS } from '../../data/observationParams'
+import { categoriesInObservations, avgCategoryMarks, TOTAL_MARKS } from '../../data/observationParams'
 import { PageSpinner, EmptyState } from '../../components/UI'
 import { formatDate, round1 } from '../../utils/helpers'
 
@@ -32,12 +32,11 @@ export default function MyProgressPage() {
   // Average marks per category across all published observations
   const categoryAvgMarks = useMemo(() => {
     const out = {}
-    OBSERVATION_CATEGORIES.forEach(cat => {
-      const vals = observations.map(o => o.categoryMarks?.[cat.id]).filter(v => v != null)
-      out[cat.id] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
-    })
+    categoriesInObservations(observations).forEach(cat => { out[cat.id] = avgCategoryMarks(observations, cat.id) })
     return out
   }, [observations])
+
+  const shownCategories = useMemo(() => categoriesInObservations(observations), [observations])
 
   const avgTotalMarks = useMemo(() => {
     const vals = observations.map(o => o.totalMarks).filter(v => v != null)
@@ -71,9 +70,9 @@ export default function MyProgressPage() {
       <div className="card">
         <div className="card-header"><span className="card-title">Average marks by category</span></div>
         <div className="card-body">
-          {OBSERVATION_CATEGORIES.map(cat => {
+          {shownCategories.map(cat => {
             const val = categoryAvgMarks[cat.id]
-            const pct = val != null ? (val / cat.maxMarks) * 100 : 0
+            const pct = val != null ? (val / (cat.maxMarks || 1)) * 100 : 0
             const color = pct >= 66 ? 'var(--green-600)' : pct >= 33 ? 'var(--amber-600)' : 'var(--red-700)'
             return (
               <div className="progress-bar-wrap" key={cat.id}>
@@ -81,7 +80,7 @@ export default function MyProgressPage() {
                   <span style={{ fontSize: 11 }}>
                     {cat.label}
                     <span style={{ color: 'var(--gray-400)', marginLeft: 6, fontSize: 10 }}>
-                      ({Math.round(cat.weightPercent * 100)}% · max {cat.maxMarks} marks)
+                      (max {cat.maxMarks} marks)
                     </span>
                   </span>
                   <span>{val != null ? `${round1(val)} / ${cat.maxMarks}` : '—'}</span>
@@ -107,7 +106,7 @@ export default function MyProgressPage() {
             <thead>
               <tr>
                 <th>Date</th>
-                {OBSERVATION_CATEGORIES.map(cat => (
+                {shownCategories.map(cat => (
                   <th key={cat.id} style={{ fontSize: 10, whiteSpace: 'normal', minWidth: 70 }}>
                     {cat.label.split(' ')[0]}<br />
                     <span style={{ color: 'var(--gray-400)', fontWeight: 400 }}>/ {cat.maxMarks}</span>
@@ -120,7 +119,7 @@ export default function MyProgressPage() {
               {observations.map(o => (
                 <tr key={o.id}>
                   <td>{formatDate(o.date)}</td>
-                  {OBSERVATION_CATEGORIES.map(cat => (
+                  {shownCategories.map(cat => (
                     <td key={cat.id}>
                       {o.categoryMarks?.[cat.id] != null ? round1(o.categoryMarks[cat.id]) : '—'}
                     </td>

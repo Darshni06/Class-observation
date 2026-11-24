@@ -1,15 +1,24 @@
-import { OBSERVATION_CATEGORIES } from '../data/observationParams'
+import { TOTAL_MARKS, templateOf, isCounts, categoriesInObservations } from '../data/observationParams'
 import { formatDate } from './helpers'
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = 'llama-3.3-70b-versatile'
 
 function describeObservation(obs) {
+  const template = templateOf(obs)
   const lines = [`Observation on ${formatDate(obs.date)} (${obs.classDisplayName}, observed by ${obs.observerName}):`]
   if (obs.totalMarks != null) {
-    lines.push(`Total marks for this session: ${Math.round(obs.totalMarks * 10) / 10} / 60`)
+    lines.push(`Total marks for this session: ${Math.round(obs.totalMarks * 10) / 10} / ${TOTAL_MARKS}`)
   }
-  OBSERVATION_CATEGORIES.forEach(cat => {
+  template.categories.forEach(cat => {
+    if (isCounts(cat)) {
+      const counts = obs.engagementCounts || {}
+      const rows = cat.fields
+        .filter(f => counts[f.id] != null && counts[f.id] !== '')
+        .map(f => `  - ${f.label}: ${counts[f.id]}${obs.classStrength ? ` of ${obs.classStrength} children` : ''}`)
+      if (rows.length) { lines.push(`[${cat.label} — number of children observed]`); lines.push(...rows) }
+      return
+    }
     const catMarks = obs.categoryMarks?.[cat.id]
     const rows = cat.params
       .map(p => {
@@ -22,9 +31,11 @@ function describeObservation(obs) {
         return `  - ${p.name}: ${levelTxt}${remarkTxt}`
       })
       .filter(Boolean)
+    const catRemark = obs.categoryRemarks?.[cat.id]
+    if (catRemark) rows.push(`  - Overall remarks for this category: ${catRemark}`)
     if (rows.length) {
-      const marksNote = catMarks != null
-        ? ` [${Math.round(catMarks * 10) / 10}/${cat.maxMarks} marks, ${Math.round(cat.weightPercent * 100)}% weight]`
+      const marksNote = catMarks != null && cat.maxMarks
+        ? ` [${Math.round(catMarks * 10) / 10}/${cat.maxMarks} marks]`
         : ''
       lines.push(`[${cat.label}${marksNote}]`)
       lines.push(...rows)
@@ -35,13 +46,11 @@ function describeObservation(obs) {
   return lines.join('\n')
 }
 
-const CATEGORY_KEY_LIST = OBSERVATION_CATEGORIES.map(c => `"${c.id}"`).join(', ')
-const CATEGORY_LABEL_LINES = OBSERVATION_CATEGORIES.map(c =>
-  `- "${c.id}" = ${c.label} (${Math.round(c.weightPercent * 100)}% weight, max ${c.maxMarks} marks)`
-).join('\n')
-
-function buildPrompt({ classDisplayName, teacherNames, period, observations }) {
+function buildPrompt({ classDisplayName, teacherNames, period, observations, categories }) {
   const observationBlocks = observations.map(describeObservation).join('\n\n')
+  const labelLines = categories.map(c =>
+    `- "${c.id}" = ${c.label}${c.maxMarks ? ` (max ${c.maxMarks} marks)` : ' (children counts, not scored)'}`).join('\n')
+  const shape = categories.map(c => `    "${c.id}": "paragraph for ${c.label}"`).join(',\n')
 
   return `You are an experienced Montessori pedagogical consultant writing a classroom observation report for a class's professional development file.
 
@@ -52,27 +61,21 @@ Teacher(s): ${teacherNames.join(', ') || 'Not assigned'}
 Reporting period: ${period}
 Number of observations included: ${observations.length}
 
-Here is the structured data from classroom observations. Each category is scored on a 1-3 scale and weighted toward a total of 60 marks:
+Here is the structured data from classroom observations. Parameters are scored on a 1-3 scale and weighted toward a total of ${TOTAL_MARKS} marks. Some categories carry one overall remark instead of per-parameter remarks, and the engagement category records numbers of children.
 
 ${observationBlocks}
 
-The categories and their weights are:
-${CATEGORY_LABEL_LINES}
+The categories are:
+${labelLines}
 
-For EACH category, write one concise, well-formed paragraph (3-5 sentences) synthesizing everything recorded under that category's parameters across all observations — weave into flowing prose, do not list parameters. If a category has little or no data, say so briefly.
+For EACH category, write one concise, well-formed paragraph (3-5 sentences) synthesizing everything recorded under that category across all observations — weave into flowing prose, do not list parameters. For a children-counts category, describe the engagement picture the numbers show. If a category has little or no data, say so briefly.
 
 Also note the overall marks scored across the observation period in your summary.
 
 Respond with ONLY a JSON object (no markdown fences, no extra commentary) in exactly this shape:
 {
   "categorySummaries": {
-    "environment": "paragraph for Prepared Environment",
-    "classroom": "paragraph for Classroom Management & Teamwork",
-    "childCentered": "paragraph for Child-Centered Observations & Planning",
-    "communication": "paragraph for Communication",
-    "montessori": "paragraph for Montessori Practice & Delivery",
-    "profDevelopment": "paragraph for Professional Development & Initiative",
-    "classPerformance": "paragraph for Class Performance"
+${shape}
   },
   "overallSummary": "3-4 sentence high-level synthesis including overall marks context.",
   "strengths": ["3 to 6 specific, evidence-based strengths, each a complete sentence."],
@@ -95,7 +98,8 @@ export async function generateObservationReport({ classDisplayName, teacherNames
     throw new Error('Select at least one observation to generate a report.')
   }
 
-  const prompt = buildPrompt({ classDisplayName, teacherNames, period, observations })
+  const categories = categoriesInObservations(observations, { includeCounts: true })
+  const prompt = buildPrompt({ classDisplayName, teacherNames, period, observations, categories })
 
   const res = await fetch(GROQ_URL, {
     method: 'POST',
@@ -128,12 +132,15 @@ export async function generateObservationReport({ classDisplayName, teacherNames
   }
 
   const categorySummaries = {}
-  OBSERVATION_CATEGORIES.forEach(cat => {
+  const categoryLabels = {}
+  categories.forEach(cat => {
     categorySummaries[cat.id] = parsed.categorySummaries?.[cat.id] || ''
+    categoryLabels[cat.id] = cat.label
   })
 
   return {
     categorySummaries,
+    categoryLabels,
     overallSummary: parsed.overallSummary || '',
     strengths: Array.isArray(parsed.strengths) ? parsed.strengths : [],
     recommendations: Array.isArray(parsed.recommendations) ? parsed.recommendations : [],

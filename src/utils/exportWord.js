@@ -5,7 +5,7 @@ import {
 import { saveAs } from 'file-saver'
 import JSZip from 'jszip'
 import { formatDate } from './helpers'
-import { OBSERVATION_CATEGORIES } from '../data/observationParams'
+import { getReportSections, reportScoreText } from '../data/observationParams'
 
 const GREEN = '0F6E56'
 const GREEN_DARK = '085041'
@@ -51,13 +51,12 @@ export function buildReportDocument(report) {
       rows: [
         new TableRow({ children: [metaCell('Teacher(s)', (report.teacherNames || []).join(', ')), metaCell('Class', report.classDisplayName)] }),
         new TableRow({ children: [metaCell('Period', report.period), metaCell('Observations covered', String(report.observationIds?.length || 0))] }),
-        new TableRow({ children: [metaCell('Overall average score', report.avgScore != null ? `${report.avgScore.toFixed(1)} / 3` : '—'), metaCell('Generated on', formatDate(new Date().toISOString().slice(0, 10)))] }),
+        new TableRow({ children: [metaCell('Average marks', reportScoreText(report)), metaCell('Generated on', formatDate(new Date().toISOString().slice(0, 10)))] }),
       ],
     }),
     new Paragraph({ text: '', spacing: { after: 200 } }),
-    ...OBSERVATION_CATEGORIES.flatMap(cat => {
-      const text = report.categorySummaries?.[cat.id]
-      if (!text) return []
+    ...getReportSections(report).flatMap(cat => {
+      const text = cat.text
       return [
         new Paragraph({
           children: [new TextRun({ text: cat.label.toUpperCase(), bold: true, size: 22, color: GREEN_DARK, characterSpacing: 10 })],

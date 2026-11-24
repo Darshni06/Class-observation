@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getAllReports, getClasses } from '../../firebase/services'
-import { OBSERVATION_CATEGORIES, TOTAL_MARKS } from '../../data/observationParams'
+import { categoriesInObservations, avgCategoryMarks, reportScoreText, TOTAL_MARKS } from '../../data/observationParams'
 import { exportReportToWord } from '../../utils/exportWord'
 import { PageSpinner, EmptyState, Pill } from '../../components/UI'
 import { formatDate, formatDateTime, observationStatus, round1 } from '../../utils/helpers'
@@ -37,10 +37,8 @@ export default function TeacherObservationsAnalysisPage() {
   const teacherReports = useMemo(() => reports.filter(r => r.classId === classId && r.createdByRole === 'teacher'), [reports, classId])
 
   // Average marks per category for a list of observations
-  const avgMarksFor = (list, catId) => {
-    const vals = list.map(o => o.categoryMarks?.[catId]).filter(v => v != null)
-    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
-  }
+  const avgMarksFor = (list, catId) => avgCategoryMarks(list, catId)
+  const shownCategories = useMemo(() => categoriesInObservations(classObs), [classObs])
   const avgTotalFor = (list) => {
     const vals = list.map(o => o.totalMarks).filter(v => v != null)
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
@@ -104,7 +102,7 @@ export default function TeacherObservationsAnalysisPage() {
               {teacherObs.length === 0 ? (
                 <EmptyState icon="chart-bar" message={`${selectedClass?.displayName || 'This class'} has no teacher-submitted observations yet.`} />
               ) : (
-                OBSERVATION_CATEGORIES.map(cat => {
+                shownCategories.map(cat => {
                   const adminVal   = avgMarksFor(adminObs, cat.id)
                   const teacherVal = avgMarksFor(teacherObs, cat.id)
                   const toBar = (val) => val != null ? (val / cat.maxMarks) * 100 : 0
@@ -114,7 +112,7 @@ export default function TeacherObservationsAnalysisPage() {
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-800)', marginBottom: 6 }}>
                         {cat.label}
                         <span style={{ color: 'var(--gray-400)', fontWeight: 400, marginLeft: 6, fontSize: 11 }}>
-                          max {cat.maxMarks} marks ({Math.round(cat.weightPercent * 100)}%)
+                          max {cat.maxMarks} marks
                         </span>
                       </div>
                       {/* Admin bar */}
@@ -197,7 +195,7 @@ export default function TeacherObservationsAnalysisPage() {
                       <tr key={r.id}>
                         <td>{r.period}</td>
                         <td>{formatDateTime(r.createdAt)}</td>
-                        <td>{r.avgScore != null ? `${round1(r.avgScore)} / ${TOTAL_MARKS}` : '—'}</td>
+                        <td>{reportScoreText(r)}</td>
                         <td>
                           <button className="btn btn-sm btn-export" onClick={() => exportReportToWord(r)}>
                             <i className="ti ti-file-type-doc" /> Word

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import {
-  getAllTeachers, getClasses, createTeacherAccount, updateTeacherProfile,
+  getAllTeachers, getClasses, createTeacherAccount, updateTeacherProfile, renameTeacher, syncDepartmentTeacherNames,
   deleteTeacherProfile, assignTeacherToClass, removeTeacherFromClass, resetPasswordEmail,
 } from '../../firebase/services'
 import { PageSpinner, EmptyState, Modal, Pill } from '../../components/UI'
@@ -18,6 +18,7 @@ export default function TeachersPage() {
   const [toDelete, setToDelete] = useState(null)
   const [saving, setSaving] = useState(false)
   const toast = useToast()
+  const [syncing, setSyncing] = useState(false)
 
   const load = async () => {
     const deptId = profile?.departmentId
@@ -27,6 +28,19 @@ export default function TeachersPage() {
     setLoading(false)
   }
   useEffect(() => { load() }, [profile?.departmentId])
+
+  const handleSyncNames = async () => {
+    setSyncing(true)
+    try {
+      const n = await syncDepartmentTeacherNames(profile?.departmentId)
+      toast.success(n ? `Updated teacher names on ${n} record(s).` : 'Everything is already up to date.')
+      load()
+    } catch (e) {
+      toast.error('Could not sync names: ' + e.message)
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   if (loading) return <PageSpinner label="Loading teachers…" />
 
@@ -39,9 +53,15 @@ export default function TeachersPage() {
           <h1>Teachers</h1>
           <p>Create teacher accounts and assign them to classes.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setModal('add')}>
-          <i className="ti ti-user-plus" /> Add Teacher
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn" disabled={syncing} onClick={handleSyncNames}
+            title="Make every class, observation and report show each teacher's current name">
+            <i className="ti ti-refresh" /> {syncing ? 'Syncing…' : 'Sync teacher names'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setModal('add')}>
+            <i className="ti ti-user-plus" /> Add Teacher
+          </button>
+        </div>
       </div>
 
       <div className="card">
@@ -76,7 +96,7 @@ export default function TeachersPage() {
         <AddTeacherModal classes={classes} departmentId={profile?.departmentId} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
       )}
       {modal?.edit && (
-        <EditTeacherModal teacher={modal.edit} classes={classes} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
+        <EditTeacherModal teacher={modal.edit} classes={classes} departmentId={profile?.departmentId} onClose={() => setModal(null)} onSaved={() => { setModal(null); load() }} />
       )}
 
       {toDelete && (
@@ -162,7 +182,7 @@ function AddTeacherModal({ classes, departmentId, onClose, onSaved }) {
   )
 }
 
-function EditTeacherModal({ teacher, classes, onClose, onSaved }) {
+function EditTeacherModal({ teacher, classes, departmentId, onClose, onSaved }) {
   const [name, setName] = useState(teacher.name || '')
   const [classId, setClassId] = useState(teacher.classId || '')
   const [saving, setSaving] = useState(false)
@@ -172,7 +192,9 @@ function EditTeacherModal({ teacher, classes, onClose, onSaved }) {
     e.preventDefault()
     setSaving(true)
     try {
-      await updateTeacherProfile(teacher.id, { name: name.trim() })
+      if (name.trim() && name.trim() !== (teacher.name || '')) {
+        await renameTeacher(teacher.id, name.trim(), teacher.departmentId || departmentId)
+      }
       if (classId !== (teacher.classId || '')) {
         if (classId) await assignTeacherToClass(classId, teacher.id)
         else await removeTeacherFromClass(teacher.id)

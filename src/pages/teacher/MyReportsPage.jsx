@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import { getReportsByClass } from '../../firebase/services'
 import { exportReportToWord } from '../../utils/exportWord'
-import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
+import { getReportSections, reportScoreText } from '../../data/observationParams'
 import { PageSpinner, EmptyState } from '../../components/UI'
 import { formatDateTime, round1 } from '../../utils/helpers'
 
@@ -50,7 +50,7 @@ export default function MyReportsPage() {
                     <td>{r.classDisplayName}</td>
                     <td>{r.period}</td>
                     <td>{formatDateTime(r.sharedAt)}</td>
-                    <td>{r.avgScore != null ? `${round1(r.avgScore)} / 3` : '—'}</td>
+                    <td>{reportScoreText(r)}</td>
                     <td>
                       <button className="btn btn-sm btn-export" onClick={(e) => { e.stopPropagation(); exportReportToWord(r) }}>
                         <i className="ti ti-file-type-doc" /> Word
@@ -70,18 +70,16 @@ export default function MyReportsPage() {
             <span className="school-logo"><img src="/assets/logo/logo.png" alt="logo" /></span>
             <div>
               <h2>{active.classDisplayName}</h2>
-              <span>{active.period} · Overall avg {active.avgScore != null ? `${round1(active.avgScore)} / 3` : '—'}</span>
+              <span>{active.period} · Avg marks {reportScoreText(active)}</span>
             </div>
           </div>
           <div className="report-body">
             <div className="report-ai-output">
-              {OBSERVATION_CATEGORIES.map(cat => (
-                active.categorySummaries?.[cat.id] ? (
-                  <div key={cat.id}>
-                    <h4>{cat.label}</h4>
-                    <p>{active.categorySummaries[cat.id]}</p>
-                  </div>
-                ) : null
+              {getReportSections(active).map(sec => (
+                <div key={sec.id}>
+                  <h4>{sec.label}</h4>
+                  <p>{sec.text}</p>
+                </div>
               ))}
               <h4>Overall Summary</h4>
               <p>{active.overallSummary}</p>

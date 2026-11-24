@@ -5,37 +5,13 @@ import { useToast } from '../../contexts/ToastContext'
 import {
   getClasses, addObservation, updateObservation, getObservation,
 } from '../../firebase/services'
-import { OBSERVATION_CATEGORIES, TOTAL_MARKS, buildBlankScores } from '../../data/observationParams'
+import {
+  TOTAL_MARKS, CURRENT_VERSION, getTemplate, buildBlankScores, buildBlankCategoryRemarks,
+  buildBlankCounts, normalizeScores, detectTemplateVersion,
+} from '../../data/observationParams'
+import ObservationCategories from '../../components/ObservationForm'
 import { PageSpinner, Pill } from '../../components/UI'
 import { todayISO, nowTime24 } from '../../utils/helpers'
-
-// Parses "3 – X / 2 – Y / 1 – Z" into [{num:'3', text:'3 – X'}, ...]
-function parsedScale(scale) {
-  if (!scale) return []
-  return scale.split(' / ').map(s => s.trim()).map(part => {
-    const num = part.match(/^(\d)/)?.[1] || null
-    return { num, text: part }
-  })
-}
-
-// Shows the 3-level criteria below the dropdown in green / gold / red
-function ScaleCriteria({ scale }) {
-  if (!scale) return (
-    <div style={{ fontSize: 10, color: 'var(--gray-400)', fontStyle: 'italic', marginTop: 4 }}>
-      Narrative only — no level required.
-    </div>
-  )
-  const colorClass = { '3': 'obs-scale-line-3', '2': 'obs-scale-line-2', '1': 'obs-scale-line-1' }
-  return (
-    <div className="obs-scale-criteria">
-      {parsedScale(scale).map((part, i) => (
-        <div key={i} className={`obs-scale-line ${colorClass[part.num] || ''}`}>
-          {part.text}
-        </div>
-      ))}
-    </div>
-  )
-}
 
 export default function NewObservationPage() {
   const { id } = useParams()
@@ -53,7 +29,11 @@ export default function NewObservationPage() {
   const [date, setDate]                 = useState(todayISO())
   const [time, setTime]                 = useState(nowTime24())
   const [durationMins, setDurationMins] = useState('')
+  const [templateVersion, setTemplateVersion] = useState(CURRENT_VERSION)
+  const template = getTemplate(templateVersion)
   const [scores, setScores]             = useState(buildBlankScores())
+  const [categoryRemarks, setCategoryRemarks] = useState(buildBlankCategoryRemarks())
+  const [counts, setCounts]             = useState(buildBlankCounts())
   const [positivePoints, setPositivePoints] = useState('')
   const [areasToImprove, setAreasToImprove] = useState('')
 
@@ -70,7 +50,14 @@ export default function NewObservationPage() {
           setDate(obs.date || todayISO())
           setTime(obs.time || nowTime24())
           setDurationMins(obs.durationMins != null ? String(obs.durationMins) : '')
-          setScores(obs.scores || buildBlankScores())
+          // An existing observation is edited in the template it was created
+          // with; only brand-new observations use the current template.
+          const ver = detectTemplateVersion(obs)
+          const tpl = getTemplate(ver)
+          setTemplateVersion(ver)
+          setScores(normalizeScores(obs.scores, tpl))
+          setCategoryRemarks({ ...buildBlankCategoryRemarks(tpl), ...(obs.categoryRemarks || {}) })
+          setCounts({ ...buildBlankCounts(tpl), ...Object.fromEntries(Object.entries(obs.engagementCounts || {}).map(([k, v]) => [k, v == null ? '' : String(v)])) })
           setPositivePoints(obs.positivePoints || '')
           setAreasToImprove(obs.areasToImprove || '')
         }
@@ -82,27 +69,23 @@ export default function NewObservationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
-  const setLevel = (catId, paramId, level) => {
-    setScores(prev => ({
-      ...prev,
-      [catId]: { ...prev[catId], [paramId]: { ...prev[catId][paramId], level } },
-    }))
-  }
-  const setRemark = (catId, paramId, remark) => {
-    setScores(prev => ({
-      ...prev,
-      [catId]: { ...prev[catId], [paramId]: { ...prev[catId][paramId], remark } },
-    }))
-  }
-
   const selectedClass = useMemo(() => classes.find(c => c.id === classId), [classes, classId])
 
   const validateHeader = () => {
     if (!classId) return 'Please select a class.'
     if (!observerName.trim()) return 'Please enter the observer name.'
     if (!date) return 'Please select a date.'
+    const strength = selectedClass?.strength
+    if (strength) {
+      const over = Object.values(cleanCounts).some(v => v != null && v > strength)
+      if (over) return `Engagement counts cannot be more than the class strength (${strength}).`
+    }
     return null
   }
+
+  const cleanCounts = Object.fromEntries(
+    Object.entries(counts).map(([k, v]) => [k, v === '' || v == null ? null : Math.max(0, parseInt(v, 10) || 0)]),
+  )
 
   const buildPayload = (status) => ({
     classId,
@@ -114,6 +97,9 @@ export default function NewObservationPage() {
     date, time,
     durationMins: durationMins ? Number(durationMins) : null,
     status, scores,
+    templateVersion,
+    ...(template.remarkMode === 'category' ? { categoryRemarks } : {}),
+    ...(template.categories.some(c => c.kind === 'counts') ? { engagementCounts: cleanCounts, classStrength: selectedClass?.strength ?? null } : {}),
     positivePoints: positivePoints.trim(),
     areasToImprove: areasToImprove.trim(),
   })
@@ -193,67 +179,13 @@ export default function NewObservationPage() {
         </div>
       </div>
 
-      {/* ── Observation categories ───────────────────────────────────────── */}
-      {OBSERVATION_CATEGORIES.map(cat => (
-        <div className="card" key={cat.id}>
-          <div className="card-body">
-            <div className="obs-section-label">
-              <i className={`ti ti-${cat.icon}`} />
-              {cat.label}
-              <span className="obs-section-marks">{cat.maxMarks} marks</span>
-              <span className="scored-tag">Included in averages</span>
-            </div>
-
-            <div className="col-header">
-              <span>Parameter</span>
-              <span>Description</span>
-              <span>Level &amp; Criteria</span>
-              <span>Remarks</span>
-            </div>
-
-            {cat.params.map(p => (
-              <div className="obs-param-row" key={p.id}>
-                {/* Col 1: Parameter name */}
-                <div className="obs-param-name">{p.name}</div>
-
-                {/* Col 2: Description */}
-                <div className="obs-param-desc">{p.description}</div>
-
-                {/* Col 3: Level selector + scale criteria */}
-                <div className="obs-level-col">
-                  {p.scorable !== false ? (
-                    <>
-                      <select
-                        className="obs-level-select"
-                        value={scores[cat.id]?.[p.id]?.level ?? ''}
-                        onChange={(e) =>
-                          setLevel(cat.id, p.id, e.target.value === '' ? null : Number(e.target.value))
-                        }
-                      >
-                        <option value="">— select —</option>
-                        <option value="3">3</option>
-                        <option value="2">2</option>
-                        <option value="1">1</option>
-                      </select>
-                      <ScaleCriteria scale={p.scale} />
-                    </>
-                  ) : (
-                    <ScaleCriteria scale={null} />
-                  )}
-                </div>
-
-                {/* Col 4: Remarks */}
-                <textarea
-                  className="obs-remark-textarea"
-                  placeholder="Write your remark here…"
-                  value={scores[cat.id]?.[p.id]?.remark ?? ''}
-                  onChange={(e) => setRemark(cat.id, p.id, e.target.value)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+      <ObservationCategories
+        template={template}
+        scores={scores} setScores={setScores}
+        categoryRemarks={categoryRemarks} setCategoryRemarks={setCategoryRemarks}
+        counts={counts} setCounts={setCounts}
+        classStrength={selectedClass?.strength}
+      />
 
       {/* ── Summary ─────────────────────────────────────────────────────── */}
       <div className="card">

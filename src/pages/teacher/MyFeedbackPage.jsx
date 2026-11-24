@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
 import { getPublishedObservationsByClass } from '../../firebase/services'
-import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
-import { PageSpinner, EmptyState, LevelBadge } from '../../components/UI'
+import { TOTAL_MARKS } from '../../data/observationParams'
+import ObservationDetail from '../../components/ObservationDetail'
+import { PageSpinner, EmptyState } from '../../components/UI'
 import { formatDate, formatTime, round1 } from '../../utils/helpers'
 
 export default function MyFeedbackPage() {
@@ -73,30 +74,11 @@ export default function MyFeedbackPage() {
             <span>Observed by {active.observerName} · {active.classDisplayName}</span>
           </div>
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--green-800)' }}>
-            Overall: {active.overallAverage != null ? `${round1(active.overallAverage)} / 3` : '—'}
+            {active.totalMarks != null ? `Total: ${round1(active.totalMarks)} / ${TOTAL_MARKS}` : `Overall: ${active.overallAverage != null ? round1(active.overallAverage) + ' / 3' : '—'}`}
           </span>
         </div>
 
-        {OBSERVATION_CATEGORIES.map(cat => {
-          const rows = cat.params
-            .map(p => ({ p, entry: active.scores?.[cat.id]?.[p.id] }))
-            .filter(({ entry }) => entry && (entry.level != null || entry.remark))
-          if (rows.length === 0) return null
-          return (
-            <div className="feedback-section" key={cat.id}>
-              <div className="feedback-section-title"><i className={`ti ti-${cat.icon}`} /> {cat.label}</div>
-              {rows.map(({ p, entry }) => (
-                <div className="feedback-row" key={p.id}>
-                  <LevelBadge level={entry.level} />
-                  <div style={{ flex: 1 }}>
-                    <div className="feedback-param">{p.name}</div>
-                    {entry.remark && <div className="feedback-remark">{entry.remark}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        })}
+        <ObservationDetail obs={active} />
 
         {(active.positivePoints || active.areasToImprove) && (
           <div className="feedback-section">

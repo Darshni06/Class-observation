@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { getAllObservations, getAllTeachers, getAllReports, getClasses } from '../../firebase/services'
 import { StatCard, PageSpinner, EmptyState, Pill } from '../../components/UI'
-import { OBSERVATION_CATEGORIES, TOTAL_MARKS } from '../../data/observationParams'
+import { categoriesInObservations, avgCategoryMarks, TOTAL_MARKS } from '../../data/observationParams'
 import { formatDate, observationStatus, round1 } from '../../utils/helpers'
 
 export default function AdminDashboard() {
@@ -36,10 +36,8 @@ export default function AdminDashboard() {
 
   // Average marks per category across all observations
   const categoryAvgMarks = {}
-  OBSERVATION_CATEGORIES.forEach(cat => {
-    const vals = observations.map(o => o.categoryMarks?.[cat.id]).filter(v => v != null)
-    categoryAvgMarks[cat.id] = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
-  })
+  const shownCategories = categoriesInObservations(observations)
+  shownCategories.forEach(cat => { categoryAvgMarks[cat.id] = avgCategoryMarks(observations, cat.id) })
 
   // Overall avg total marks
   const totalMarksVals = observations.map(o => o.totalMarks).filter(v => v != null)
@@ -73,9 +71,9 @@ export default function AdminDashboard() {
         <div className="card">
           <div className="card-header"><span className="card-title">Average marks by category</span></div>
           <div className="card-body">
-            {OBSERVATION_CATEGORIES.map(cat => {
+            {shownCategories.map(cat => {
               const val = categoryAvgMarks[cat.id]
-              const pct = val != null ? (val / cat.maxMarks) * 100 : 0
+              const pct = val != null ? (val / (cat.maxMarks || 1)) * 100 : 0
               const color = pct >= 66 ? 'var(--green-600)' : pct >= 33 ? 'var(--amber-600)' : 'var(--red-700)'
               return (
                 <div className="progress-bar-wrap" key={cat.id}>

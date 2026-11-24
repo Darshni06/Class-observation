@@ -1,6 +1,6 @@
 import {
   collection, doc, getDocs, getDoc, addDoc, setDoc, updateDoc,
-  deleteDoc, query, where, serverTimestamp, runTransaction,
+  deleteDoc, query, where, serverTimestamp, runTransaction, writeBatch,
 } from 'firebase/firestore'
 import {
   signInWithEmailAndPassword,
@@ -8,7 +8,7 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth'
 import { db, auth } from './config'
-import { computeAverages, isFullyScored } from '../data/observationParams'
+import { computeAverages, isFullyScored, templateOf, CURRENT_VERSION, detectTemplateVersion } from '../data/observationParams'
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
@@ -137,6 +137,14 @@ export const deleteClass = async (classId) => {
   await deleteDoc(doc(db, 'classes', classId))
 }
 
+// Remove a teacher from a class doc by ID (names are index-aligned with IDs).
+const withoutTeacher = (classData, teacherId) => {
+  const ids = classData.teacherIds || []
+  const names = classData.teacherNames || []
+  const keepIdx = ids.map((id, i) => i).filter(i => ids[i] !== teacherId)
+  return { ids: keepIdx.map(i => ids[i]), names: keepIdx.map(i => names[i]).filter(n => n !== undefined) }
+}
+
 // Moves a teacher onto a class (removing them from any previous class
 // first). Also re-syncs the teacher's departmentId to the class's
 // departmentId as a safety net — in normal use they already match, since an
@@ -155,10 +163,8 @@ export const assignTeacherToClass = async (classId, teacherId) => {
       const oldClassSnap = await tx.get(oldClassRef)
       if (oldClassSnap.exists()) {
         const oldData = oldClassSnap.data()
-        tx.update(oldClassRef, {
-          teacherIds: (oldData.teacherIds || []).filter(id => id !== teacherId),
-          teacherNames: (oldData.teacherNames || []).filter(n => n !== teacherName),
-        })
+        const { ids, names } = withoutTeacher(oldData, teacherId)
+        tx.update(oldClassRef, { teacherIds: ids, teacherNames: names })
       }
     }
 
@@ -166,8 +172,13 @@ export const assignTeacherToClass = async (classId, teacherId) => {
     const classSnap = await tx.get(classRef)
     if (!classSnap.exists()) throw new Error('Class not found')
     const classData = classSnap.data()
-    const newTeacherIds = Array.from(new Set([...(classData.teacherIds || []), teacherId]))
-    const newTeacherNames = Array.from(new Set([...(classData.teacherNames || []), teacherName]))
+    const existingIds = classData.teacherIds || []
+    const existingNames = classData.teacherNames || []
+    const newTeacherIds = [...existingIds]
+    const newTeacherNames = [...existingNames]
+    const at = existingIds.indexOf(teacherId)
+    if (at === -1) { newTeacherIds.push(teacherId); newTeacherNames.push(teacherName) }
+    else newTeacherNames[at] = teacherName
 
     tx.update(classRef, { teacherIds: newTeacherIds, teacherNames: newTeacherNames })
     tx.update(teacherRef, { classId, departmentId: classData.departmentId, updatedAt: serverTimestamp() })
@@ -187,10 +198,8 @@ export const removeTeacherFromClass = async (teacherId) => {
     const classSnap = await tx.get(classRef)
     if (classSnap.exists()) {
       const classData = classSnap.data()
-      tx.update(classRef, {
-        teacherIds: (classData.teacherIds || []).filter(id => id !== teacherId),
-        teacherNames: (classData.teacherNames || []).filter(n => n !== teacherData.name),
-      })
+      const { ids, names } = withoutTeacher(classData, teacherId)
+      tx.update(classRef, { teacherIds: ids, teacherNames: names })
     }
     tx.update(teacherRef, { classId: null, updatedAt: serverTimestamp() })
   })
@@ -202,18 +211,34 @@ export const removeTeacherFromClass = async (teacherId) => {
 // Every observation also carries its class's departmentId, denormalized at
 // creation, so department-scoped queries don't need an extra join/lookup.
 
-const withComputedScores = (data) => {
-      const { categoryAverages, categoryMarks, totalMarks, overallAverage } = computeAverages(data.scores)
-      return {
-        ...data,
-        categoryAverages,
-        categoryMarks,
-        totalMarks,
-        overallAverage,
-        fullyScored: isFullyScored(data.scores),
-      }
-    }
+// Firestore rejects `undefined`; strip it recursively.
+const stripUndefined = (v) => {
+  if (Array.isArray(v)) return v.map(stripUndefined)
+  if (v && typeof v === 'object' && !(v instanceof Date) && typeof v.toDate !== 'function' && v.constructor === Object) {
+    const out = {}
+    Object.keys(v).forEach(k => { if (v[k] !== undefined) out[k] = stripUndefined(v[k]) })
+    return out
+  }
+  return v
+}
 
+// Scores are always computed under the observation's OWN template version:
+// new docs get 'v3'; existing docs keep the version they were created with,
+// so editing an old observation never re-scores it under a different template.
+const withComputedScores = (data) => {
+  const version  = data.templateVersion || detectTemplateVersion(data) || CURRENT_VERSION
+  const template = templateOf({ ...data, templateVersion: version })
+  const { categoryAverages, categoryMarks, totalMarks, overallAverage } = computeAverages(data.scores, template)
+  return stripUndefined({
+    ...data,
+    templateVersion: version,
+    categoryAverages,
+    categoryMarks,
+    totalMarks,
+    overallAverage,
+    fullyScored: isFullyScored(data.scores, template),
+  })
+}
 
 // `data` must already include `departmentId` (the page building the payload
 // sets it from the selected/own class's departmentId).
@@ -343,4 +368,46 @@ export const getReportsByClass = async (classId, departmentId) => {
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() }))
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+}
+
+// ─── Teacher name propagation ───────────────────────────────────────────────
+// Teacher names are denormalized onto classes, observations and reports (so
+// lists render without joins). Whenever a name changes — or to repair older
+// stale data — this makes every department document match the teacher's
+// CURRENT name in `users`. IDs are the source of truth; nothing else changes.
+export const syncDepartmentTeacherNames = async (departmentId) => {
+  const teachers = await getAllTeachers(departmentId)
+  const nameById = {}
+  teachers.forEach(t => { nameById[t.id] = t.name || '' })
+
+  const sources = await Promise.all([
+    getDocs(query(collection(db, 'classes'), where('departmentId', '==', departmentId))),
+    getDocs(query(collection(db, 'observations'), where('departmentId', '==', departmentId))),
+    getDocs(query(collection(db, 'reports'), where('departmentId', '==', departmentId))),
+  ])
+  const colNames = ['classes', 'observations', 'reports']
+  const updates = []
+  sources.forEach((snap, k) => {
+    snap.docs.forEach(d => {
+      const data = d.data()
+      const ids = data.teacherIds || []
+      if (!ids.length) return
+      const old = data.teacherNames || []
+      const next = ids.map((id, i) => nameById[id] ?? old[i] ?? '')
+      const same = next.length === old.length && next.every((n, i) => n === old[i])
+      if (!same) updates.push({ ref: doc(db, colNames[k], d.id), teacherNames: next })
+    })
+  })
+  for (let i = 0; i < updates.length; i += 400) {
+    const batch = writeBatch(db)
+    updates.slice(i, i + 400).forEach(u => batch.update(u.ref, { teacherNames: u.teacherNames }))
+    await batch.commit()
+  }
+  return updates.length
+}
+
+// Rename a teacher everywhere in one go.
+export const renameTeacher = async (teacherId, newName, departmentId) => {
+  await updateTeacherProfile(teacherId, { name: newName })
+  return syncDepartmentTeacherNames(departmentId)
 }

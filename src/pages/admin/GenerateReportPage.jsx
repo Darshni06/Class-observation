@@ -5,7 +5,7 @@ import {
   addReport, shareReportWithTeacher, deleteReport,
 } from '../../firebase/services'
 import { generateObservationReport } from '../../utils/geminiService'
-import { OBSERVATION_CATEGORIES } from '../../data/observationParams'
+import { getReportSections, reportScoreText, TOTAL_MARKS } from '../../data/observationParams'
 import { exportReportToWord } from '../../utils/exportWord'
 import { useAuth } from '../../contexts/AuthContext'
 import { useToast } from '../../contexts/ToastContext'
@@ -64,6 +64,11 @@ export default function GenerateReportPage() {
     setSelectedIds(prev => prev.includes(obsId) ? prev.filter(i => i !== obsId) : [...prev, obsId])
   }
 
+  const avgTotalMarks = useMemo(() => {
+    const vals = selectedObservations.map(o => o.totalMarks).filter(v => v != null)
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
+  }, [selectedObservations])
+
   const avgScore = useMemo(() => {
     const vals = selectedObservations.map(o => o.overallAverage).filter(v => v != null)
     return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null
@@ -105,10 +110,12 @@ export default function GenerateReportPage() {
         period: period.trim(),
         observationIds: selectedIds,
         categorySummaries: draft.categorySummaries,
+        categoryLabels: draft.categoryLabels || {},
         overallSummary: draft.overallSummary,
         strengths: draft.strengths,
         recommendations: draft.recommendations,
         avgScore,
+        avgTotalMarks,
         status: 'generated',
       }
       const id = await addReport(reportData, profile?.id, 'admin')
@@ -186,7 +193,7 @@ export default function GenerateReportPage() {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th></th><th>Date</th><th>Observer</th><th>Overall Avg</th></tr>
+                    <tr><th></th><th>Date</th><th>Observer</th><th>Total Marks</th></tr>
                   </thead>
                   <tbody>
                     {classObs.map(o => (
@@ -194,7 +201,7 @@ export default function GenerateReportPage() {
                         <td><input type="checkbox" checked={selectedIds.includes(o.id)} onChange={() => toggleSelect(o.id)} /></td>
                         <td>{formatDate(o.date)}</td>
                         <td>{o.observerName}</td>
-                        <td>{o.overallAverage != null ? `${round1(o.overallAverage)} / 3` : '—'}</td>
+                        <td>{o.totalMarks != null ? `${round1(o.totalMarks)} / ${TOTAL_MARKS}` : (o.overallAverage != null ? `${round1(o.overallAverage)} / 3 avg` : '—')}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -224,18 +231,16 @@ export default function GenerateReportPage() {
             <span className="school-logo"><img src="/assets/logo/logo.png" alt="logo" /></span>
             <div>
               <h2>{selectedClass?.displayName}</h2>
-              <span>{period} · {selectedObservations.length} observation(s) · Overall avg {avgScore != null ? `${round1(avgScore)} / 3` : '—'}</span>
+              <span>{period} · {selectedObservations.length} observation(s) · Avg marks {avgTotalMarks != null ? `${round1(avgTotalMarks)} / ${TOTAL_MARKS}` : '—'}</span>
             </div>
           </div>
           <div className="report-body">
             <div className="report-ai-output">
-              {OBSERVATION_CATEGORIES.map(cat => (
-                draft.categorySummaries?.[cat.id] ? (
-                  <div key={cat.id}>
-                    <h4>{cat.label}</h4>
-                    <p>{draft.categorySummaries[cat.id]}</p>
-                  </div>
-                ) : null
+              {getReportSections(draft).map(sec => (
+                <div key={sec.id}>
+                  <h4>{sec.label}</h4>
+                  <p>{sec.text}</p>
+                </div>
               ))}
               <h4>Overall Summary</h4>
               <p>{draft.overallSummary}</p>

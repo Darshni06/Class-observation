@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
-import { OBSERVATION_CATEGORIES, TOTAL_MARKS, round2 } from '../data/observationParams'
+import { templateOf, isCounts, TOTAL_MARKS, round2 } from '../data/observationParams'
 import { formatDate, formatTime } from './helpers'
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -26,92 +26,83 @@ const safeSheetName = (name, usedNames) => {
 
 function buildSheetAOA(obs) {
   const rows = []
+  const template = templateOf(obs)       // each observation uses its own template
+  const perCategory = template.remarkMode === 'category'
+  const pctOf = (cat) => (cat.maxMarks && template.totalMarks ? `${Math.round((cat.maxMarks / template.totalMarks) * 100)}%` : '')
 
-  // ── Header block ────────────────────────────────────────────────────────
   rows.push(['KAMALA NIKETAN', '', 'Class Observation Report', '', '', '', ''])
   rows.push(['Class:', obs.classDisplayName || '', '', 'Observer:', obs.observerName || '', '', ''])
   rows.push(['Teacher(s):', (obs.teacherNames || []).join(', '), '', 'Date:', formatDate(obs.date), 'Time:', formatTime(obs.time)])
   rows.push([])
   rows.push(['Category', 'Parameter', 'Description', 'Scale', 'Level', 'Marks', 'Remarks'])
 
-  // ── Parameter rows ──────────────────────────────────────────────────────
-  OBSERVATION_CATEGORIES.forEach(cat => {
+  template.categories.forEach(cat => {
+    if (isCounts(cat)) {
+      const counts = obs.engagementCounts || {}
+      let first = true
+      cat.fields.forEach(f => {
+        rows.push([first ? cat.label : '', f.label, 'Number of children', '', counts[f.id] ?? '', '', ''])
+        first = false
+      })
+      if (obs.classStrength) rows.push(['', 'Class strength', '', '', obs.classStrength, '', ''])
+      rows.push([])
+      return
+    }
+
     const catMarks = obs.categoryMarks?.[cat.id]
     const catAvg   = obs.categoryAverages?.[cat.id]
     let firstParam = true
 
     cat.params.forEach(p => {
-      const entry   = obs.scores?.[cat.id]?.[p.id]
-      const level   = entry?.level ?? ''
-      const remark  = entry?.remark || ''
-
-      // Per-parameter marks: (level / 3) × maxMarks / numScoredParams — shown
-      // only for scorable params that actually have a level. For the category
-      // we show the aggregate marks in the category subtotal row instead.
-      const paramMarkDisplay = p.scorable !== false && entry?.level
-        ? '' // leave blank per-param; aggregate shown in subtotal
-        : ''
-
+      const entry = obs.scores?.[cat.id]?.[p.id]
       rows.push([
         firstParam ? cat.label : '',
         p.name,
         p.description || '',
         p.scale || '',
-        p.scorable !== false ? level : '(narrative only)',
+        p.scorable !== false ? (entry?.level ?? '') : '(narrative only)',
         '',
-        remark,
+        perCategory ? '' : (entry?.remark || ''),
       ])
       firstParam = false
     })
 
-    // Category subtotal row
-    rows.push([
-      '',
-      `▸ ${cat.label} subtotal`,
-      `Weight: ${Math.round(cat.weightPercent * 100)}%   Max marks: ${cat.maxMarks}`,
-      catAvg != null ? `Avg level: ${round2(catAvg)} / 3` : 'Not scored',
-      '',
-      catMarks != null ? `${round2(catMarks)} / ${cat.maxMarks}` : '—',
-      '',
-    ])
-    rows.push([]) // blank separator
+    if (perCategory) {
+      rows.push(['', `Remarks — ${cat.label}`, '', '', '', '', obs.categoryRemarks?.[cat.id] || ''])
+    }
+
+    if (cat.maxMarks) {
+      rows.push([
+        '', `▸ ${cat.label} subtotal`,
+        `${pctOf(cat) ? `Weight: ${pctOf(cat)}   ` : ''}Max marks: ${cat.maxMarks}`,
+        catAvg != null ? `Avg level: ${round2(catAvg)} / 3` : 'Not scored',
+        '',
+        catMarks != null ? `${round2(catMarks)} / ${cat.maxMarks}` : '—',
+        '',
+      ])
+    }
+    rows.push([])
   })
 
-  // ── Summary section ─────────────────────────────────────────────────────
-  rows.push([])
-  rows.push(['MARKS SUMMARY', '', '', '', '', '', ''])
-  rows.push(['Category', 'Weight', 'Max Marks', 'Avg Level (1-3)', 'Marks Earned', '', ''])
+  const scored = template.categories.filter(c => !isCounts(c) && c.maxMarks)
+  if (scored.length) {
+    rows.push([])
+    rows.push(['MARKS SUMMARY', '', '', '', '', '', ''])
+    rows.push(['Category', 'Weight', 'Max Marks', 'Avg Level (1-3)', 'Marks Earned', '', ''])
+    scored.forEach(cat => {
+      const catMarks = obs.categoryMarks?.[cat.id]
+      const catAvg   = obs.categoryAverages?.[cat.id]
+      rows.push([cat.label, pctOf(cat), cat.maxMarks,
+        catAvg != null ? round2(catAvg) : '—', catMarks != null ? round2(catMarks) : '—', '', ''])
+    })
+    rows.push([])
+    rows.push(['TOTAL MARKS', '', template.totalMarks || TOTAL_MARKS, '',
+      obs.totalMarks != null ? round2(obs.totalMarks) : '—', '', ''])
+  }
 
-  OBSERVATION_CATEGORIES.forEach(cat => {
-    const catMarks = obs.categoryMarks?.[cat.id]
-    const catAvg   = obs.categoryAverages?.[cat.id]
-    rows.push([
-      cat.label,
-      `${Math.round(cat.weightPercent * 100)}%`,
-      cat.maxMarks,
-      catAvg != null ? round2(catAvg) : '—',
-      catMarks != null ? round2(catMarks) : '—',
-      '',
-      '',
-    ])
-  })
-
-  rows.push([])
-  rows.push([
-    'TOTAL MARKS',
-    '',
-    TOTAL_MARKS,
-    '',
-    obs.totalMarks != null ? round2(obs.totalMarks) : '—',
-    '',
-    '',
-  ])
-
-  // ── Qualitative notes ───────────────────────────────────────────────────
   rows.push([])
   rows.push(['Positive points to retain always in the class', '', obs.positivePoints || '', '', '', '', ''])
   rows.push(['Areas to improve', '', obs.areasToImprove || '', '', '', '', ''])
-
   return rows
 }
 
