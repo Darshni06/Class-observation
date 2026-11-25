@@ -1,4 +1,4 @@
-import { TOTAL_MARKS, templateOf, isCounts, categoriesInObservations } from '../data/observationParams'
+import { TOTAL_MARKS, templateOf, isCounts, countKey, timeKey, setNumbers, categoriesInObservations } from '../data/observationParams'
 import { formatDate } from './helpers'
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
@@ -13,9 +13,14 @@ function describeObservation(obs) {
   template.categories.forEach(cat => {
     if (isCounts(cat)) {
       const counts = obs.engagementCounts || {}
-      const rows = cat.fields
-        .filter(f => counts[f.id] != null && counts[f.id] !== '')
-        .map(f => `  - ${f.label}: ${counts[f.id]}${obs.classStrength ? ` of ${obs.classStrength} children` : ''}`)
+      const rows = []
+      setNumbers(cat).forEach(n => {
+        const t = counts[timeKey(n)]
+        cat.fields.forEach(f => {
+          const v = counts[countKey(f.id, n)]
+          if (v != null && v !== '') rows.push(`  - Recording ${n}${t ? ` (${t})` : ''} — ${f.label}: ${v}${obs.classStrength ? ` of ${obs.classStrength} children` : ''}`)
+        })
+      })
       if (rows.length) { lines.push(`[${cat.label} — number of children observed]`); lines.push(...rows) }
       return
     }

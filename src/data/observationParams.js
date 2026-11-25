@@ -75,7 +75,8 @@ const V3_CATEGORIES = [
     scored: false,
     maxMarks: 0,
     weightPercent: 0,
-    description: 'Enter the number of children observed for each behaviour.',
+    description: 'Enter the number of children observed for each behaviour, with the time of each recording.',
+    sets: 2,
     fields: [
       { id: 'sustained_interest', label: 'Children showing sustained interest' },
       { id: 'repeats_work',       label: 'Children repeating work voluntarily' },
@@ -154,10 +155,21 @@ export const buildBlankCategoryRemarks = (template = CURRENT_TEMPLATE) => {
   template.categories.forEach(cat => { if (!isCounts(cat)) r[cat.id] = '' })
   return r
 }
+// Engagement counts are recorded in `sets` (default 1) — each set has its own
+// time. Set 1 keeps the original keys (so earlier v3 data is unchanged);
+// set 2 uses a `_2` suffix. Time keys: `_time`, `_time_2`.
+export const countKey = (fieldId, set = 1) => (set === 1 ? fieldId : `${fieldId}_${set}`)
+export const timeKey  = (set = 1) => (set === 1 ? '_time' : `_time_${set}`)
+export const isTimeKey = (k) => k.startsWith('_time')
+export const setNumbers = (cat) => Array.from({ length: cat.sets || 1 }, (_, i) => i + 1)
+
 export const buildBlankCounts = (template = CURRENT_TEMPLATE) => {
   const out = {}
   template.categories.filter(isCounts).forEach(cat => {
-    cat.fields.forEach(f => { out[f.id] = '' })
+    setNumbers(cat).forEach(n => {
+      out[timeKey(n)] = ''
+      cat.fields.forEach(f => { out[countKey(f.id, n)] = '' })
+    })
   })
   return out
 }

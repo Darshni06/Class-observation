@@ -77,14 +77,14 @@ export default function NewObservationPage() {
     if (!date) return 'Please select a date.'
     const strength = selectedClass?.strength
     if (strength) {
-      const over = Object.values(cleanCounts).some(v => v != null && v > strength)
+      const over = Object.entries(cleanCounts).some(([k, v]) => !k.startsWith('_time') && v != null && v > strength)
       if (over) return `Engagement counts cannot be more than the class strength (${strength}).`
     }
     return null
   }
 
   const cleanCounts = Object.fromEntries(
-    Object.entries(counts).map(([k, v]) => [k, v === '' || v == null ? null : Math.max(0, parseInt(v, 10) || 0)]),
+    Object.entries(counts).map(([k, v]) => [k, k.startsWith('_time') ? (v || null) : (v === '' || v == null ? null : Math.max(0, parseInt(v, 10) || 0))]),
   )
 
   const buildPayload = (status) => ({

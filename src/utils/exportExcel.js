@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
-import { templateOf, isCounts, TOTAL_MARKS, round2 } from '../data/observationParams'
+import { templateOf, isCounts, countKey, timeKey, setNumbers, TOTAL_MARKS, round2 } from '../data/observationParams'
 import { formatDate, formatTime } from './helpers'
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -40,9 +40,13 @@ function buildSheetAOA(obs) {
     if (isCounts(cat)) {
       const counts = obs.engagementCounts || {}
       let first = true
-      cat.fields.forEach(f => {
-        rows.push([first ? cat.label : '', f.label, 'Number of children', '', counts[f.id] ?? '', '', ''])
+      setNumbers(cat).forEach(n => {
+        const t = counts[timeKey(n)]
+        rows.push([first ? cat.label : '', `Recording ${n} — Time`, '', '', t ? formatTime(t) : '', '', ''])
         first = false
+        cat.fields.forEach(f => {
+          rows.push(['', f.label, `Number of children (recording ${n})`, '', counts[countKey(f.id, n)] ?? '', '', ''])
+        })
       })
       if (obs.classStrength) rows.push(['', 'Class strength', '', '', obs.classStrength, '', ''])
       rows.push([])

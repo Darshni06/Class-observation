@@ -776,3 +776,8 @@ tbody tr:nth-child(even):hover td { background: #F5F3EF; }
   .obs-param-row.cat-remark-mode { grid-template-columns: 1fr; gap: 8px; }
   .col-header.cat-remark-mode { display: none; }
 }
+
+.obs-count-settime { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--green-800); }
+.obs-count-settime label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--gray-500); }
+.obs-count-settime input { width: 140px; }
+.obs-counts-timechip { font-size: 12px; font-weight: 700; color: var(--green-800); margin: 8px 0 6px; }

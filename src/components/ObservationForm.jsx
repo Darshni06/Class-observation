@@ -1,4 +1,4 @@
-import { isCounts } from '../data/observationParams'
+import { isCounts, countKey, timeKey, setNumbers } from '../data/observationParams'
 
 // Parses "3 – X / 2 – Y / 1 – Z" into [{num, text}, ...]
 function parsedScale(scale) {
@@ -60,20 +60,33 @@ export default function ObservationCategories({
                 <p className="obs-counts-hint" style={{ marginTop: 0 }}>
                   {cat.description}{classStrength ? ` Class strength: ${classStrength}.` : ''}
                 </p>
-                <div className="obs-counts-grid">
-                  {cat.fields.map(f => (
-                    <div className="obs-count-field" key={f.id}>
-                      <label htmlFor={`cnt-${f.id}`}>{f.label}</label>
+                {setNumbers(cat).map(n => (
+                  <div key={n} style={{ marginTop: 14 }}>
+                    <div className="obs-count-settime">
+                      <strong>Recording {n}</strong>
+                      <label htmlFor={`cnt-time-${n}`}>Time</label>
                       <input
-                        id={`cnt-${f.id}`} type="number" min="0" inputMode="numeric"
-                        max={classStrength || undefined}
-                        value={counts?.[f.id] ?? ''}
-                        onChange={(e) => setCounts(prev => ({ ...prev, [f.id]: e.target.value }))}
-                        placeholder="0"
+                        id={`cnt-time-${n}`} type="time"
+                        value={counts?.[timeKey(n)] ?? ''}
+                        onChange={(e) => setCounts(prev => ({ ...prev, [timeKey(n)]: e.target.value }))}
                       />
                     </div>
-                  ))}
-                </div>
+                    <div className="obs-counts-grid">
+                      {cat.fields.map(f => (
+                        <div className="obs-count-field" key={f.id}>
+                          <label htmlFor={`cnt-${f.id}-${n}`}>{f.label}</label>
+                          <input
+                            id={`cnt-${f.id}-${n}`} type="number" min="0" inputMode="numeric"
+                            max={classStrength || undefined}
+                            value={counts?.[countKey(f.id, n)] ?? ''}
+                            onChange={(e) => setCounts(prev => ({ ...prev, [countKey(f.id, n)]: e.target.value }))}
+                            placeholder="0"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )

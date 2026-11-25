@@ -1,5 +1,6 @@
-import { templateOf, isCounts, round1 } from '../data/observationParams'
+import { templateOf, isCounts, countKey, timeKey, setNumbers, round1 } from '../data/observationParams'
 import { LevelBadge } from './UI'
+import { formatTime } from '../utils/helpers'
 
 // Read-only view of one observation, rendered in the template it was
 // recorded with (so old observations look exactly as they always did).
@@ -11,19 +12,27 @@ export default function ObservationDetail({ obs }) {
       {template.categories.map(cat => {
         if (isCounts(cat)) {
           const counts = obs.engagementCounts || {}
-          const filled = cat.fields.filter(f => counts[f.id] != null && counts[f.id] !== '')
-          if (!filled.length) return null
+          const sets = setNumbers(cat).map(n => ({
+            n, time: counts[timeKey(n)],
+            filled: cat.fields.filter(f => counts[countKey(f.id, n)] != null && counts[countKey(f.id, n)] !== ''),
+          })).filter(x => x.filled.length)
+          if (!sets.length) return null
           return (
             <div className="feedback-section" key={cat.id}>
               <div className="feedback-section-title"><i className={`ti ti-${cat.icon || 'bulb'}`} /> {cat.label}</div>
-              <div>
-                {filled.map(f => (
-                  <div className="obs-count-chip" key={f.id}>
-                    <b>{counts[f.id]}</b>
-                    <span>{f.label}</span>
-                  </div>
-                ))}
-              </div>
+              {sets.map(x => (
+                <div key={x.n}>
+                  {(sets.length > 1 || x.time) && (
+                    <div className="obs-counts-timechip">Recording {x.n}{x.time ? ` · ${formatTime(x.time)}` : ''}</div>
+                  )}
+                  {x.filled.map(f => (
+                    <div className="obs-count-chip" key={f.id}>
+                      <b>{counts[countKey(f.id, x.n)]}</b>
+                      <span>{f.label}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
               {obs.classStrength ? <div className="obs-counts-hint">Out of {obs.classStrength} children.</div> : null}
             </div>
           )
