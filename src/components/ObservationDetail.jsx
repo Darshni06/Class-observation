@@ -23,9 +23,11 @@ export default function ObservationDetail({ obs }) {
                     <div className="obs-counts-timechip">Recording {x.n}{x.time ? ` · ${formatTime(x.time)}` : ''}</div>
                   )}
                   {x.filled.map(f => (
-                    <div className="obs-count-chip" key={f.id}>
-                      <b>{counts[countKey(f.id, x.n)]}</b>
-                      <span>{f.label}</span>
+                    <div className="feedback-row" key={f.id}>
+                      <div style={{ flex: 1 }}>
+                        <div className="feedback-param">{f.label}</div>
+                        <div className="feedback-remark">{counts[countKey(f.id, x.n)]}</div>
+                      </div>
                     </div>
                   ))}
                 </div>

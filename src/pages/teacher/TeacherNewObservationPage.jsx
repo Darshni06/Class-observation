@@ -72,16 +72,12 @@ export default function TeacherNewObservationPage() {
     if (!myClass) return 'You are not assigned to a class yet. Contact your admin.'
     if (!observerName.trim()) return 'Please enter the observer name.'
     if (!date) return 'Please select a date.'
-    const strength = myClass?.strength
-    if (strength) {
-      const over = Object.entries(cleanCounts).some(([k, v]) => !k.startsWith('_time') && v != null && v > strength)
-      if (over) return `Engagement counts cannot be more than the class strength (${strength}).`
-    }
     return null
   }
 
+  // Engagement fields are free text (also times); trim and store empty as null.
   const cleanCounts = Object.fromEntries(
-    Object.entries(counts).map(([k, v]) => [k, k.startsWith('_time') ? (v || null) : (v === '' || v == null ? null : Math.max(0, parseInt(v, 10) || 0))]),
+    Object.entries(counts).map(([k, v]) => [k, (v == null || String(v).trim() === '') ? null : String(v).trim()]),
   )
 
   const buildPayload = (status) => ({

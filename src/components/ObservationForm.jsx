@@ -64,12 +64,13 @@ export default function ObservationCategories({
                       {cat.fields.map(f => (
                         <div className="obs-count-field" key={f.id}>
                           <label htmlFor={`cnt-${f.id}-${n}`}>{f.label}</label>
-                          <input
-                            id={`cnt-${f.id}-${n}`} type="number" min="0" inputMode="numeric"
-                            max={classStrength || undefined}
+                          <textarea
+                            id={`cnt-${f.id}-${n}`}
+                            className="obs-remark-textarea"
+                            style={{ minHeight: 64 }}
                             value={counts?.[countKey(f.id, n)] ?? ''}
                             onChange={(e) => setCounts(prev => ({ ...prev, [countKey(f.id, n)]: e.target.value }))}
-                            placeholder="0"
+                            placeholder="Type here…"
                           />
                         </div>
                       ))}
