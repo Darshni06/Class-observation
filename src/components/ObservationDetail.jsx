@@ -1,4 +1,4 @@
-import { templateOf, isCounts, countKey, timeKey, setNumbers, round1 } from '../data/observationParams'
+import { templateOf, isCounts, embeddedCounts, countKey, timeKey, setNumbers, round1 } from '../data/observationParams'
 import { LevelBadge } from './UI'
 import { formatTime } from '../utils/helpers'
 
@@ -7,18 +7,15 @@ import { formatTime } from '../utils/helpers'
 export default function ObservationDetail({ obs }) {
   const template = templateOf(obs)
 
-  return (
-    <>
-      {template.categories.map(cat => {
-        if (isCounts(cat)) {
-          const counts = obs.engagementCounts || {}
+  const renderCounts = (cat) => {
+    const counts = obs.engagementCounts || {}
           const sets = setNumbers(cat).map(n => ({
             n, time: counts[timeKey(n)],
             filled: cat.fields.filter(f => counts[countKey(f.id, n)] != null && counts[countKey(f.id, n)] !== ''),
           })).filter(x => x.filled.length)
           if (!sets.length) return null
-          return (
-            <div className="feedback-section" key={cat.id}>
+    return (
+      <div className="obs-counts-block" key={cat.id}>
               <div className="feedback-section-title"><i className={`ti ti-${cat.icon || 'bulb'}`} /> {cat.label}</div>
               {sets.map(x => (
                 <div key={x.n}>
@@ -34,15 +31,21 @@ export default function ObservationDetail({ obs }) {
                 </div>
               ))}
               {obs.classStrength ? <div className="obs-counts-hint">Out of {obs.classStrength} children.</div> : null}
-            </div>
-          )
-        }
+      </div>
+    )
+  }
 
+  return (
+    <>
+      {template.categories.map(cat => {
+        if (isCounts(cat) && cat.embedIn) return null
         const rows = cat.params
           .map(p => ({ p, entry: obs.scores?.[cat.id]?.[p.id] }))
           .filter(({ entry }) => entry && (entry.level != null || entry.remark))
         const catRemark = obs.categoryRemarks?.[cat.id]
-        if (rows.length === 0 && !catRemark) return null
+        const embedded = embeddedCounts(template, cat.id)
+        const embeddedNode = embedded ? renderCounts(embedded) : null
+        if (rows.length === 0 && !catRemark && !embeddedNode) return null
         const marks = obs.categoryMarks?.[cat.id]
 
         return (
@@ -64,6 +67,7 @@ export default function ObservationDetail({ obs }) {
                 </div>
               </div>
             ))}
+            {embeddedNode}
             {catRemark && <div className="summary-box" style={{ marginTop: 8 }}>{catRemark}</div>}
           </div>
         )

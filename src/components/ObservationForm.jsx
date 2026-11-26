@@ -1,4 +1,4 @@
-import { isCounts, countKey, timeKey, setNumbers } from '../data/observationParams'
+import { isCounts, countKey, timeKey, setNumbers, embeddedCounts } from '../data/observationParams'
 
 // Parses "3 – X / 2 – Y / 1 – Z" into [{num, text}, ...]
 function parsedScale(scale) {
@@ -39,19 +39,8 @@ export default function ObservationCategories({
   const setRemark = (catId, paramId, remark) =>
     setScores(prev => ({ ...prev, [catId]: { ...prev[catId], [paramId]: { ...prev[catId][paramId], remark } } }))
 
-  return (
-    <>
-      {template.version !== 'v3' && (
-        <div className="obs-legacy-note">
-          This observation was recorded with an earlier version of the form, so it is shown and edited in that same format. Its marks are not affected by the newer form.
-        </div>
-      )}
-
-      {template.categories.map(cat => {
-        if (isCounts(cat)) {
-          return (
-            <div className="card" key={cat.id}>
-              <div className="card-body">
+  const renderCounts = (cat) => (
+    <div className="obs-counts-block" key={cat.id}>
                 <div className="obs-section-label">
                   <i className={`ti ti-${cat.icon || 'bulb'}`} />
                   {cat.label}
@@ -87,11 +76,19 @@ export default function ObservationCategories({
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          )
-        }
+    </div>
+  )
 
+  return (
+    <>
+      {template.version !== 'v3' && (
+        <div className="obs-legacy-note">
+          This observation was recorded with an earlier version of the form, so it is shown and edited in that same format. Its marks are not affected by the newer form.
+        </div>
+      )}
+
+      {template.categories.map(cat => {
+        if (isCounts(cat) && cat.embedIn) return null
         const rowCls = perCategory ? 'cat-remark-mode' : ''
         return (
           <div className="card" key={cat.id}>
@@ -143,6 +140,8 @@ export default function ObservationCategories({
                   )}
                 </div>
               ))}
+
+              {embeddedCounts(template, cat.id) && renderCounts(embeddedCounts(template, cat.id))}
 
               {perCategory && (
                 <div className="obs-cat-remarks">

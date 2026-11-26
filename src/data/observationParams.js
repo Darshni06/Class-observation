@@ -62,7 +62,7 @@ const V3_CATEGORIES = [
         scale: '3 – Highly independent, activities mostly self-selected / 2 – Occasional support needed, balanced between self-choice and adult suggestion / 1 – Frequent adult dependency, mostly adult-directed',
         scorable: true,
       },
-      ...keep('childCentered', ['cc_support', 'cc_challenge', 'cc_obs_planning', 'cc_notable']),
+      ...keep('childCentered', ['cc_support', 'cc_challenge', 'cc_obs_planning']),
     ],
   },
 
@@ -72,6 +72,7 @@ const V3_CATEGORIES = [
     label: 'Engagement & Concentration',
     icon: 'bulb',
     kind: 'counts',
+    embedIn: 'childCentered',   // rendered inside that category, before its remarks
     scored: false,
     maxMarks: 0,
     weightPercent: 0,
@@ -262,7 +263,7 @@ export const categoriesInObservations = (observations, { includeCounts = false }
   const seen = new Map()
   ;(observations || []).forEach(o => {
     templateOf(o).categories.forEach(c => {
-      if (isCounts(c) ? !includeCounts : c.scored === false) return
+      if (isCounts(c) ? (!includeCounts || c.embedIn) : c.scored === false) return
       if (!seen.has(c.id)) seen.set(c.id, { id: c.id, label: LABELS[c.id] || c.label, maxMarks: LATEST_MAX[c.id] || null })
     })
   })
@@ -294,3 +295,5 @@ export const avgCategoryMarks = (observations, catId) => {
   if (!pcts.length || !max) return null
   return (pcts.reduce((a, b) => a + b, 0) / pcts.length) * max
 }
+
+export const embeddedCounts = (template, catId) => template.categories.find(c => isCounts(c) && c.embedIn === catId) || null

@@ -735,3 +735,49 @@ tbody tr:nth-child(even):hover td { background: #F5F3EF; }
   body { background: white; }
   .content { padding: 0; }
 }
+
+/* ── v3 form: one remarks box per category + counts section ───────────── */
+.obs-param-row.cat-remark-mode { grid-template-columns: 200px 1fr 300px; }
+.col-header.cat-remark-mode { grid-template-columns: 200px 1fr 300px; }
+.obs-cat-remarks {
+  margin-top: 14px; padding: 14px 16px;
+  background: var(--green-50); border: 1px solid var(--green-100);
+  border-radius: var(--radius-md);
+}
+.obs-cat-remarks label {
+  display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--green-800); margin-bottom: 6px;
+}
+.obs-cat-remarks .obs-remark-textarea { min-height: 84px; }
+.obs-counts-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px;
+  margin-top: 6px;
+}
+.obs-count-field {
+  background: var(--white); border: 1.5px solid var(--border-md);
+  border-radius: var(--radius-md); padding: 12px 14px;
+}
+.obs-count-field label { display: block; font-size: 12px; font-weight: 600; color: var(--gray-800); margin-bottom: 8px; line-height: 1.4; }
+.obs-count-field input { width: 100%; font-size: 20px; font-weight: 700; padding: 6px 10px; }
+.obs-counts-hint { font-size: 11px; color: var(--gray-500); margin: 8px 0 0; }
+.obs-count-chip {
+  display: inline-flex; flex-direction: column; align-items: center; min-width: 96px;
+  background: var(--green-50); border: 1px solid var(--green-100); border-radius: var(--radius-md);
+  padding: 10px 14px; margin: 0 8px 8px 0;
+}
+.obs-count-chip b { font-size: 22px; color: var(--green-800); line-height: 1.1; }
+.obs-count-chip span { font-size: 11px; color: var(--gray-600); text-align: center; max-width: 150px; }
+.obs-legacy-note {
+  font-size: 12px; color: var(--gold-800); background: var(--gold-50);
+  border: 1px solid var(--gold-100); border-radius: var(--radius-sm);
+  padding: 8px 12px; margin-bottom: 14px;
+}
+@media (max-width: 800px) {
+  .obs-param-row.cat-remark-mode { grid-template-columns: 1fr; gap: 8px; }
+  .col-header.cat-remark-mode { display: none; }
+}
+
+.obs-count-settime { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--green-800); }
+.obs-count-settime label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--gray-500); }
+.obs-count-settime input { width: 140px; }
+.obs-counts-timechip { font-size: 12px; font-weight: 700; color: var(--green-800); margin: 8px 0 6px; }

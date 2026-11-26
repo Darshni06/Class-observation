@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
-import { templateOf, isCounts, countKey, timeKey, setNumbers, TOTAL_MARKS, round2 } from '../data/observationParams'
+import { templateOf, isCounts, embeddedCounts, countKey, timeKey, setNumbers, TOTAL_MARKS, round2 } from '../data/observationParams'
 import { formatDate, formatTime } from './helpers'
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -36,8 +36,7 @@ function buildSheetAOA(obs) {
   rows.push([])
   rows.push(['Category', 'Parameter', 'Description', 'Scale', 'Level', 'Marks', 'Remarks'])
 
-  template.categories.forEach(cat => {
-    if (isCounts(cat)) {
+  const pushCounts = (cat) => {
       const counts = obs.engagementCounts || {}
       let first = true
       setNumbers(cat).forEach(n => {
@@ -49,9 +48,10 @@ function buildSheetAOA(obs) {
         })
       })
       if (obs.classStrength) rows.push(['', 'Class strength', '', '', obs.classStrength, '', ''])
-      rows.push([])
-      return
-    }
+  }
+
+  template.categories.forEach(cat => {
+    if (isCounts(cat) && cat.embedIn) return
 
     const catMarks = obs.categoryMarks?.[cat.id]
     const catAvg   = obs.categoryAverages?.[cat.id]
@@ -70,6 +70,9 @@ function buildSheetAOA(obs) {
       ])
       firstParam = false
     })
+
+    const emb = embeddedCounts(template, cat.id)
+    if (emb) pushCounts(emb)
 
     if (perCategory) {
       rows.push(['', `Remarks — ${cat.label}`, '', '', '', '', obs.categoryRemarks?.[cat.id] || ''])

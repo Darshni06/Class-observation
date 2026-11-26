@@ -1,8 +1,21 @@
-import { TOTAL_MARKS, templateOf, isCounts, countKey, timeKey, setNumbers, categoriesInObservations } from '../data/observationParams'
+import { TOTAL_MARKS, templateOf, isCounts, embeddedCounts, countKey, timeKey, setNumbers, categoriesInObservations } from '../data/observationParams'
 import { formatDate } from './helpers'
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 const GROQ_MODEL = 'llama-3.3-70b-versatile'
+
+function countRows(obs, cat) {
+  const counts = obs.engagementCounts || {}
+  const rows = []
+  setNumbers(cat).forEach(n => {
+    const t = counts[timeKey(n)]
+    cat.fields.forEach(f => {
+      const v = counts[countKey(f.id, n)]
+      if (v != null && v !== '') rows.push(`  - ${cat.label}, recording ${n}${t ? ` (${t})` : ''} — ${f.label}: ${v}${obs.classStrength ? ` of ${obs.classStrength} children` : ''}`)
+    })
+  })
+  return rows
+}
 
 function describeObservation(obs) {
   const template = templateOf(obs)
@@ -11,19 +24,7 @@ function describeObservation(obs) {
     lines.push(`Total marks for this session: ${Math.round(obs.totalMarks * 10) / 10} / ${TOTAL_MARKS}`)
   }
   template.categories.forEach(cat => {
-    if (isCounts(cat)) {
-      const counts = obs.engagementCounts || {}
-      const rows = []
-      setNumbers(cat).forEach(n => {
-        const t = counts[timeKey(n)]
-        cat.fields.forEach(f => {
-          const v = counts[countKey(f.id, n)]
-          if (v != null && v !== '') rows.push(`  - Recording ${n}${t ? ` (${t})` : ''} — ${f.label}: ${v}${obs.classStrength ? ` of ${obs.classStrength} children` : ''}`)
-        })
-      })
-      if (rows.length) { lines.push(`[${cat.label} — number of children observed]`); lines.push(...rows) }
-      return
-    }
+    if (isCounts(cat) && cat.embedIn) return   // described inside its parent category
     const catMarks = obs.categoryMarks?.[cat.id]
     const rows = cat.params
       .map(p => {
@@ -36,6 +37,8 @@ function describeObservation(obs) {
         return `  - ${p.name}: ${levelTxt}${remarkTxt}`
       })
       .filter(Boolean)
+    const emb = embeddedCounts(template, cat.id)
+    if (emb) rows.push(...countRows(obs, emb))
     const catRemark = obs.categoryRemarks?.[cat.id]
     if (catRemark) rows.push(`  - Overall remarks for this category: ${catRemark}`)
     if (rows.length) {
@@ -66,14 +69,14 @@ Teacher(s): ${teacherNames.join(', ') || 'Not assigned'}
 Reporting period: ${period}
 Number of observations included: ${observations.length}
 
-Here is the structured data from classroom observations. Parameters are scored on a 1-3 scale and weighted toward a total of ${TOTAL_MARKS} marks. Some categories carry one overall remark instead of per-parameter remarks, and the engagement category records numbers of children.
+Here is the structured data from classroom observations. Parameters are scored on a 1-3 scale and weighted toward a total of ${TOTAL_MARKS} marks. Some categories carry one overall remark instead of per-parameter remarks, and the Child-Centered category also records numbers of children showing engagement & concentration (in timed recordings); weave those counts into the Child-Centered paragraph.
 
 ${observationBlocks}
 
 The categories are:
 ${labelLines}
 
-For EACH category, write one concise, well-formed paragraph (3-5 sentences) synthesizing everything recorded under that category across all observations — weave into flowing prose, do not list parameters. For a children-counts category, describe the engagement picture the numbers show. If a category has little or no data, say so briefly.
+For EACH category, write one concise, well-formed paragraph (3-5 sentences) synthesizing everything recorded under that category across all observations — weave into flowing prose, do not list parameters. If a category has little or no data, say so briefly.
 
 Also note the overall marks scored across the observation period in your summary.
 
